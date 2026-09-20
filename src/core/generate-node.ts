@@ -39,6 +39,7 @@ export async function generateNode(
     label: deriveLabel(req.prompt),
     prompt: req.prompt,
     content: content.text,
+    contentType: content.contentType,
     status: 'done',
     generatorId: generator.id,
     position: req.position,

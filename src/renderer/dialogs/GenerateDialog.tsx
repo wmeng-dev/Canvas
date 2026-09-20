@@ -3,6 +3,15 @@
 
 import { useEffect, useState } from 'react'
 import { useTreeStore } from '../store/treeStore'
+import type { ContentType } from '../../shared/types'
+
+/** 可选内容类型（image 留待后续阶段） */
+const CONTENT_TYPES: { value: ContentType; label: string }[] = [
+  { value: 'markdown', label: 'Markdown' },
+  { value: 'text', label: '纯文本' },
+  { value: 'html', label: 'HTML' },
+  { value: 'svg', label: 'SVG' },
+]
 
 export function GenerateDialog() {
   const open = useTreeStore((s) => s.dialogOpen)
@@ -16,6 +25,7 @@ export function GenerateDialog() {
 
   const [prompt, setPrompt] = useState('')
   const [generatorId, setGeneratorId] = useState('')
+  const [contentType, setContentType] = useState<ContentType>('markdown')
 
   // 每次打开时重置输入，并默认选中首个生成器
   useEffect(() => {
@@ -110,6 +120,30 @@ export function GenerateDialog() {
           </select>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+          <label style={{ fontSize: 12, color: '#7d8590' }}>内容类型</label>
+          <select
+            data-testid="content-type-select"
+            value={contentType}
+            onChange={(e) => setContentType(e.target.value as ContentType)}
+            style={{
+              flex: 1,
+              background: '#010409',
+              color: '#e6edf3',
+              border: '1px solid #30363d',
+              borderRadius: 6,
+              padding: '6px 8px',
+              fontSize: 12,
+            }}
+          >
+            {CONTENT_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {error && (
           <p data-testid="dialog-error" style={{ color: '#f85149', fontSize: 12, margin: '12px 0 0' }}>
             {error}
@@ -134,7 +168,7 @@ export function GenerateDialog() {
           </button>
           <button
             data-testid="submit-generate"
-            onClick={() => generate(prompt, generatorId || undefined)}
+            onClick={() => generate(prompt, generatorId || undefined, contentType)}
             disabled={generating}
             style={{
               background: generating ? '#1f6feb88' : '#1f6feb',

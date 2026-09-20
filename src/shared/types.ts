@@ -19,6 +19,8 @@ export interface TreeNode {
   label: string
   prompt: string
   content: string
+  /** 内容类型：渲染端据此选择预览方式（markdown / html / svg / text） */
+  contentType: ContentType
   status: NodeStatus
   generatorId: string | null
   /** 画布坐标（渲染端生成/布局后回写，便于下次打开保持布局） */

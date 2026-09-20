@@ -48,6 +48,7 @@ ok('ensureProject is idempotent')
   assert.strictEqual(res.node.parentId, rootId)
   assert.deepStrictEqual(res.node.position, { x: 280, y: 0 })
   assert.ok(res.node.content.includes('方向 A：把核心体验做减法'), 'content carries prompt')
+  assert.strictEqual(res.node.contentType, 'markdown', 'contentType defaults to markdown')
   assert.ok(res.edge, 'edge returned')
   assert.strictEqual(res.edge.source, rootId)
   assert.strictEqual(res.edge.target, res.node.id)
@@ -99,7 +100,28 @@ ok('ensureProject is idempotent')
   assert.ok(longNode.node.label.endsWith('…'))
   ok('label truncated to 24 chars + ellipsis')
 
-  // 10. 未知生成器报错
+  // 10. contentType 透传（C.4：渲染端据此选预览方式）
+  const htmlNode = await generateNode(svc, {
+    projectId,
+    parentNodeId: rootId,
+    prompt: 'HTML 卡片',
+    contentType: 'html',
+  })
+  assert.strictEqual(htmlNode.node.contentType, 'html')
+  assert.ok(htmlNode.node.content.includes('<h1>'), 'html generator output used')
+  ok('contentType flows through to the stored node')
+
+  const svgNode = await generateNode(svc, {
+    projectId,
+    parentNodeId: rootId,
+    prompt: 'SVG 图',
+    contentType: 'svg',
+  })
+  assert.strictEqual(svgNode.node.contentType, 'svg')
+  assert.ok(svgNode.node.content.includes('<svg'), 'svg markup produced')
+  ok('svg contentType produces svg markup')
+
+  // 11. 未知生成器报错
   let threw = false
   try {
     await generateNode(svc, { projectId, parentNodeId: rootId, prompt: 'x', generatorId: 'nope' })

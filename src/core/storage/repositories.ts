@@ -68,6 +68,7 @@ export class ProjectRepository {
       label: input.label,
       prompt: input.prompt ?? '',
       content: input.content ?? '',
+      contentType: input.contentType ?? 'markdown',
       status: input.status ?? 'empty',
       generatorId: input.generatorId ?? null,
       position: input.position,

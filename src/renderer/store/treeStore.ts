@@ -6,11 +6,13 @@ import { create } from 'zustand'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import type { GeneratorInfo } from '../../shared/ipc'
-import type { ProjectFile, TreeNode } from '../../shared/types'
+import type { ContentType, ProjectFile, TreeNode } from '../../shared/types'
 
 export interface CreativeNodeData extends Record<string, unknown> {
   label: string
   content?: string
+  /** 预览用：决定用 markdown / html(沙箱) / svg(沙箱) / text 渲染 */
+  contentType?: ContentType
   status?: string
   prompt?: string
   /** 父节点 id（根层为 null）；用于布局与"兄弟计数" */
@@ -43,7 +45,7 @@ interface TreeState {
   openDialog: (parentId: string | null) => void
   closeDialog: () => void
   clearError: () => void
-  generate: (prompt: string, generatorId?: string) => Promise<void>
+  generate: (prompt: string, generatorId?: string, contentType?: ContentType) => Promise<void>
 }
 
 const seedNodes: CreativeNode[] = [
@@ -62,6 +64,7 @@ function toCreativeNode(n: TreeNode, index: number): CreativeNode {
     data: {
       label: n.label || '未命名',
       content: n.content,
+      contentType: n.contentType,
       status: n.status,
       prompt: n.prompt,
       parentId: n.parentId,
@@ -137,7 +140,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   closeDialog: () => set({ dialogOpen: false, error: null }),
   clearError: () => set({ error: null }),
 
-  generate: async (prompt, generatorId) => {
+  generate: async (prompt, generatorId, contentType) => {
     const trimmed = prompt.trim()
     if (!trimmed) {
       set({ error: '请输入一个想法描述。' })
@@ -159,6 +162,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
           data: {
             label: trimmed.slice(0, 24),
             content: `# ${trimmed}\n\n（占位内容，未连接主进程）`,
+            contentType: contentType ?? 'markdown',
             status: 'done',
             parentId: dialogParentId,
           },
@@ -181,6 +185,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
         parentNodeId: dialogParentId,
         prompt: trimmed,
         generatorId,
+        contentType,
         position,
       })
       const newNode = toCreativeNode(res.node, 0)

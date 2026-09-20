@@ -1,7 +1,17 @@
-// C.2 预览面板（文本版）：显示当前选中节点的内容。
-// C.4 会扩展为多类型预览（markdown / html / svg）。
+// C.2/C.4 预览面板：显示当前选中节点，并按 contentType 选择预览方式。
+// 类型分发见 previews/ContentPreview.tsx。
 
 import { useTreeStore } from '../store/treeStore'
+import { ContentPreview } from '../previews/ContentPreview'
+import type { ContentType } from '../../shared/types'
+
+const TYPE_LABEL: Record<ContentType, string> = {
+  markdown: 'Markdown',
+  html: 'HTML',
+  svg: 'SVG',
+  text: '纯文本',
+  image: '图片',
+}
 
 export function PreviewPanel() {
   const node = useTreeStore(
@@ -9,8 +19,11 @@ export function PreviewPanel() {
   )
   const openDialog = useTreeStore((s) => s.openDialog)
 
+  const contentType = (node?.data.contentType ?? 'markdown') as ContentType
+
   return (
     <aside
+      data-testid="preview-panel"
       style={{
         width: 340,
         flex: '0 0 340px',
@@ -30,38 +43,41 @@ export function PreviewPanel() {
         </p>
       ) : (
         <div>
-          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10, color: '#e6edf3' }}>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6, color: '#e6edf3' }}>
             {node.data.label}
           </div>
-          <button
-            data-testid="branch-from-node"
-            onClick={() => openDialog(node.id)}
-            style={{
-              marginBottom: 14,
-              background: 'transparent',
-              color: '#58a6ff',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              padding: '5px 10px',
-              fontSize: 12,
-              cursor: 'pointer',
-            }}
-          >
-            从这里发散
-          </button>
-          <pre
-            style={{
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              fontFamily: 'inherit',
-              fontSize: 13,
-              lineHeight: 1.7,
-              margin: 0,
-              color: '#c9d1d9',
-            }}
-          >
-            {node.data.content ?? '（暂无内容）'}
-          </pre>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <span
+              data-testid="preview-type"
+              style={{
+                fontSize: 11,
+                color: '#58a6ff',
+                border: '1px solid #1f6feb55',
+                background: '#1f6feb1a',
+                borderRadius: 4,
+                padding: '1px 6px',
+              }}
+            >
+              {TYPE_LABEL[contentType]}
+            </span>
+            <button
+              data-testid="branch-from-node"
+              onClick={() => openDialog(node.id)}
+              style={{
+                background: 'transparent',
+                color: '#58a6ff',
+                border: '1px solid #30363d',
+                borderRadius: 6,
+                padding: '3px 10px',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              从这里发散
+            </button>
+          </div>
+
+          <ContentPreview contentType={contentType} content={node.data.content ?? ''} />
         </div>
       )}
     </aside>

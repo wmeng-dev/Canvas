@@ -1,25 +1,101 @@
 // 确定性占位生成器：不联网、不依赖 key。
 // 用于：无可用 AI 后端时的兜底、以及 E2E/单测中替代真实生成。
+//
+// 按 contentType 产出对应形态的内容，使 C.4 的多类型预览在无真实模型时也可演示/验证。
+// 测试钩子：DIVERGE_FAKE_ECHO=1 时把 prompt **原样（不转义）** 嵌进内容模板里，
+// 用于验证 HTML/SVG 沙箱是否真的挡住脚本（正常模式下 prompt 会被转义）。
 
 import type { Generator, NodeContent, NodeSpec } from './types'
+import type { ContentType } from '../../shared/types'
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const LIST_ITEMS = ['占位内容 1', '占位内容 2', '占位内容 3']
+
+function markdownHeading(subject: string): string {
+  return `# ${subject}\n\n${LIST_ITEMS.map((i) => `- ${i}`).join('\n')}`
+}
+
+function plainText(subject: string): string {
+  return `${subject}\n\n${LIST_ITEMS.join('\n')}`
+}
+
+function htmlBody(subject: string): string {
+  return `<!doctype html><meta charset="utf-8">
+<style>
+  body { font-family: system-ui, "Microsoft YaHei", sans-serif; margin: 0; padding: 14px; color: #111; }
+  h1 { font-size: 17px; margin: 0 0 10px; }
+  ul { padding-left: 20px; margin: 0; }
+</style>
+<h1>${subject}</h1>
+<ul>${LIST_ITEMS.map((i) => `<li>${i}</li>`).join('')}</ul>`
+}
+
+function svgBody(label: string, extraRaw: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 200" width="100%" height="100%">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1f6feb"/>
+      <stop offset="100%" stop-color="#8957e5"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="344" height="184" rx="14" fill="url(#g)"/>
+  <circle cx="76" cy="76" r="30" fill="#ffffff" fill-opacity="0.85"/>
+  <text x="180" y="120" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" fill="#ffffff">${label}</text>
+  <text x="180" y="146" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#ffffff" fill-opacity="0.8">SVG 占位生成结果</text>
+  ${extraRaw}
+</svg>`
+}
 
 export function createFakeGenerator(
   id = 'fake',
   label = '本地占位生成器',
 ): Generator {
+  const echo = process.env.DIVERGE_FAKE_ECHO === '1'
+
   return {
     id,
     label,
     kind: 'direct',
     async generate(spec: NodeSpec): Promise<NodeContent> {
-      const subject = spec.prompt.trim() || '（空提示）'
-      const parent = spec.parentContext ? `\n\n> 基于父节点：${spec.parentContext}` : ''
-      return {
-        contentType: spec.contentType ?? 'markdown',
-        text: `# ${subject}\n\n- 占位内容 1\n- 占位内容 2\n- 占位内容 3${parent}\n`,
-        model: 'fake',
-        finishedAt: new Date().toISOString(),
+      const type: ContentType = spec.contentType ?? 'markdown'
+      const raw = spec.prompt.trim() || '（空提示）'
+      // 正常模式转义；echo 模式保持原样（供沙箱安全性测试注入真载荷）
+      const subject = echo ? raw : escapeHtml(raw)
+      const parentRaw = spec.parentContext ?? ''
+      const parentSafe = echo ? parentRaw : escapeHtml(parentRaw)
+
+      let text: string
+      switch (type) {
+        case 'html': {
+          const quote = parentRaw
+            ? `<blockquote style="margin:10px 0 0;padding:6px 10px;border-left:3px solid #999;color:#444;font-size:12px">基于父节点：${parentSafe}</blockquote>`
+            : ''
+          text = htmlBody(subject).replace('</ul>', `</ul>${quote}`)
+          break
+        }
+        case 'svg': {
+          const label = escapeHtml(raw.length > 22 ? `${raw.slice(0, 22)}…` : raw)
+          const extra = echo && /[<>&]/.test(raw) ? raw : ''
+          text = svgBody(label, extra)
+          break
+        }
+        case 'text':
+          text = `${plainText(subject)}${parentRaw ? `\n\n基于父节点：${parentSafe}` : ''}`
+          break
+        case 'markdown':
+        default:
+          text = `${markdownHeading(subject)}${parentRaw ? `\n\n> 基于父节点：${parentSafe}` : ''}`
+          break
       }
+
+      return { contentType: type, text, model: 'fake', finishedAt: new Date().toISOString() }
     },
   }
 }
