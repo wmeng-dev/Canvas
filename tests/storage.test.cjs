@@ -53,6 +53,37 @@ assert.strictEqual(updated.content, '生成的内容')
 assert.strictEqual(updated.status, 'done')
 ok('update node content/status')
 
+// 5b. 向后兼容：内容已存在但没有版本字段时，读取会补一个「稳定 id」的 v1
+const migrated = repo.get(p.project.id).tree.nodes.find((n) => n.id === child.id)
+assert.strictEqual(migrated.versions.length, 1, 'migration synthesizes v1 for pre-existing content')
+assert.strictEqual(migrated.versions[0].id, `${child.id}-v1`, 'synthesized id is stable/derivable')
+assert.strictEqual(migrated.versions[0].content, '生成的内容')
+assert.strictEqual(migrated.currentVersionId, `${child.id}-v1`)
+
+// 追加新版本：旧版本保留
+const withV2 = repo.addVersion(p.project.id, child.id, {
+  content: '第二版内容', contentType: 'html', generatorId: 'fake', model: 'm',
+})
+assert.strictEqual(withV2.versions.length, 2)
+assert.strictEqual(withV2.currentVersionId, withV2.versions[1].id)
+assert.strictEqual(withV2.content, '第二版内容')
+assert.strictEqual(withV2.contentType, 'html')
+assert.strictEqual(withV2.versions[0].content, '生成的内容', 'v1 preserved')
+ok('addVersion appends new version and keeps history')
+
+// 5c. 翻案：指回旧版本（版本一个不删），且落盘
+const reverted = repo.setCurrentVersion(p.project.id, child.id, migrated.versions[0].id)
+assert.strictEqual(reverted.currentVersionId, `${child.id}-v1`)
+assert.strictEqual(reverted.content, '生成的内容')
+assert.strictEqual(reverted.versions.length, 2, 'nothing deleted')
+assert.strictEqual(
+  repo.get(p.project.id).tree.nodes.find((n) => n.id === child.id).content,
+  '生成的内容',
+  'revert persisted',
+)
+assert.throws(() => repo.setCurrentVersion(p.project.id, child.id, 'nope'), /Version not found/)
+ok('setCurrentVersion reverts + persists + rejects unknown version')
+
 // 6. 重复边拒绝
 assert.throws(() => repo.addEdge(p.project.id, root.id, child.id), /already exists/)
 ok('duplicate edge rejected')

@@ -1,12 +1,12 @@
-// C.2 渲染端状态：节点 / 边 / 选中节点（Zustand）。
-// C.3 起：项目从主进程加载（ensureProject），生成走 IPC（generateNode），
-// 无 Electron（纯浏览器预览）时回落到内置种子数据 + 本地占位生成。
+// C.2/C.3/C.5 渲染端状态：节点 / 边 / 选中节点 / 版本 / 右键菜单（Zustand）。
+// 项目从主进程加载（ensureProject），生成与版本操作走 IPC；
+// 无 Electron（纯浏览器预览）时回落到种子数据 + 本地占位生成。
 
 import { create } from 'zustand'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import type { GeneratorInfo } from '../../shared/ipc'
-import type { ContentType, ProjectFile, TreeNode } from '../../shared/types'
+import type { ContentType, NodeVersion, ProjectFile, TreeNode } from '../../shared/types'
 
 export interface CreativeNodeData extends Record<string, unknown> {
   label: string
@@ -17,9 +17,19 @@ export interface CreativeNodeData extends Record<string, unknown> {
   prompt?: string
   /** 父节点 id（根层为 null）；用于布局与"兄弟计数" */
   parentId?: string | null
+  /** 历史版本（按时间升序）与当前版本，用于"翻案" */
+  versions?: NodeVersion[]
+  currentVersionId?: string | null
 }
 
 export type CreativeNode = Node<CreativeNodeData>
+
+interface ContextMenuState {
+  nodeId: string
+  /** 视口坐标（fixed 定位） */
+  x: number
+  y: number
+}
 
 interface TreeState {
   projectId: string | null
@@ -33,8 +43,13 @@ interface TreeState {
   dialogParentId: string | null
   generating: boolean
   error: string | null
+  /** 部分失败（批量发散时个别失败）的提示 */
+  warning: string | null
+  /** 右键菜单 */
+  menu: ContextMenuState | null
+  /** 正在重新生成的节点 id */
+  regeneratingId: string | null
 
-  /** 应用启动时调用：拉项目 + 生成器列表（有 IPC 走主进程，否则用种子数据） */
   init: () => Promise<void>
 
   onNodesChange: (changes: NodeChange<CreativeNode>[]) => void
@@ -45,7 +60,14 @@ interface TreeState {
   openDialog: (parentId: string | null) => void
   closeDialog: () => void
   clearError: () => void
-  generate: (prompt: string, generatorId?: string, contentType?: ContentType) => Promise<void>
+  clearWarning: () => void
+
+  openMenu: (nodeId: string, x: number, y: number) => void
+  closeMenu: () => void
+
+  generate: (prompt: string, generatorId?: string, contentType?: ContentType, count?: number) => Promise<void>
+  regenerate: (nodeId: string) => Promise<void>
+  setVersion: (nodeId: string, versionId: string) => Promise<void>
 }
 
 const seedNodes: CreativeNode[] = [
@@ -64,12 +86,35 @@ function toCreativeNode(n: TreeNode, index: number): CreativeNode {
     data: {
       label: n.label || '未命名',
       content: n.content,
-      contentType: n.contentType,
+      contentType: n.contentType ?? 'markdown',
       status: n.status,
       prompt: n.prompt,
       parentId: n.parentId,
+      versions: n.versions ?? [],
+      currentVersionId: n.currentVersionId ?? null,
     },
   }
+}
+
+/** 把主进程返回的节点合并回画布（保留原坐标 —— 重新生成/翻案不应让节点跳位）。 */
+function mergeNode(nodes: CreativeNode[], updated: TreeNode): CreativeNode[] {
+  return nodes.map((n) =>
+    n.id === updated.id
+      ? {
+          ...n,
+          data: {
+            ...n.data,
+            label: updated.label,
+            content: updated.content,
+            contentType: updated.contentType ?? 'markdown',
+            status: updated.status,
+            prompt: updated.prompt,
+            versions: updated.versions ?? [],
+            currentVersionId: updated.currentVersionId ?? null,
+          },
+        }
+      : n,
+  )
 }
 
 function fileToGraph(file: ProjectFile): { nodes: CreativeNode[]; edges: Edge[] } {
@@ -106,11 +151,13 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   dialogParentId: null,
   generating: false,
   error: null,
+  warning: null,
+  menu: null,
+  regeneratingId: null,
 
   init: async () => {
     const api = window.diverge
     if (!api) {
-      // 纯浏览器：无主进程，用种子 + 占位生成器，便于快速预览
       set({ generators: [{ id: 'fake', label: '本地占位生成器（无主进程）', kind: 'direct' }] })
       return
     }
@@ -139,8 +186,12 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   openDialog: (parentId) => set({ dialogOpen: true, dialogParentId: parentId, error: null }),
   closeDialog: () => set({ dialogOpen: false, error: null }),
   clearError: () => set({ error: null }),
+  clearWarning: () => set({ warning: null }),
 
-  generate: async (prompt, generatorId, contentType) => {
+  openMenu: (nodeId, x, y) => set({ menu: { nodeId, x, y } }),
+  closeMenu: () => set({ menu: null }),
+
+  generate: async (prompt, generatorId, contentType, count = 1) => {
     const trimmed = prompt.trim()
     if (!trimmed) {
       set({ error: '请输入一个想法描述。' })
@@ -149,32 +200,42 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     const { dialogParentId, nodes, projectId } = get()
     const siblings = nodes.filter((n) => (n.data.parentId ?? null) === dialogParentId).length
     const position = computePosition(nodes, dialogParentId, siblings)
-    set({ generating: true, error: null })
+    set({ generating: true, error: null, warning: null, menu: null })
 
     const api = window.diverge
     try {
       if (!api) {
         // 无主进程：本地占位，保证对话框在纯浏览器下也可用
-        const id = `local-${Date.now()}`
-        const newNode: CreativeNode = {
-          id,
-          position,
-          data: {
-            label: trimmed.slice(0, 24),
-            content: `# ${trimmed}\n\n（占位内容，未连接主进程）`,
-            contentType: contentType ?? 'markdown',
-            status: 'done',
-            parentId: dialogParentId,
-          },
-        }
+        const created: CreativeNode[] = Array.from({ length: count }, (_, i) => {
+          const label = count === 1 ? trimmed : `${trimmed}（方向 ${i + 1}）`
+          return {
+            id: `local-${Date.now()}-${i}`,
+            position: { x: position.x, y: position.y + i * 150 },
+            data: {
+              label: label.slice(0, 24),
+              content: `# ${label}\n\n（占位内容，未连接主进程）`,
+              contentType: contentType ?? 'markdown',
+              status: 'done',
+              parentId: dialogParentId,
+            },
+          }
+        })
         set((s) => ({
-          nodes: [...s.nodes, newNode],
-          edges: dialogParentId
-            ? [...s.edges, { id: `e-${id}`, source: dialogParentId, target: id, animated: true }]
-            : s.edges,
+          nodes: [...s.nodes, ...created],
+          edges: [
+            ...s.edges,
+            ...(dialogParentId
+              ? created.map((c) => ({
+                  id: `e-${c.id}`,
+                  source: dialogParentId,
+                  target: c.id,
+                  animated: true,
+                }))
+              : []),
+          ],
           generating: false,
           dialogOpen: false,
-          selectedNodeId: id,
+          selectedNodeId: created[0]?.id ?? null,
         }))
         return
       }
@@ -186,24 +247,69 @@ export const useTreeStore = create<TreeState>((set, get) => ({
         prompt: trimmed,
         generatorId,
         contentType,
+        count,
         position,
       })
-      const newNode = toCreativeNode(res.node, 0)
+      const created = res.items.map((it, i) => toCreativeNode(it.node, i))
       set((s) => ({
-        nodes: [...s.nodes, newNode],
-        edges: res.edge
-          ? [
-              ...s.edges,
-              { id: res.edge.id, source: res.edge.source, target: res.edge.target, animated: true },
-            ]
-          : s.edges,
+        nodes: [...s.nodes, ...created],
+        edges: [
+          ...s.edges,
+          ...res.items
+            .filter((it) => it.edge)
+            .map((it) => ({
+              id: it.edge!.id,
+              source: it.edge!.source,
+              target: it.edge!.target,
+              animated: true,
+            })),
+        ],
         generating: false,
         dialogOpen: false,
-        selectedNodeId: newNode.id,
+        selectedNodeId: created[0]?.id ?? null,
         error: null,
+        warning:
+          res.failures.length > 0
+            ? `有 ${res.failures.length} 条生成失败：${res.failures[0].error}`
+            : null,
       }))
     } catch (e) {
       set({ generating: false, error: `生成失败：${(e as Error).message}` })
+    }
+  },
+
+  regenerate: async (nodeId) => {
+    const { projectId } = get()
+    const api = window.diverge
+    if (!api || !projectId) {
+      set({ error: '需要主进程支持才能重新生成。' })
+      return
+    }
+    set({ regeneratingId: nodeId, error: null, menu: null })
+    try {
+      const updated = await api.regenerateNode({ projectId, nodeId })
+      set((s) => ({
+        nodes: mergeNode(s.nodes, updated),
+        regeneratingId: null,
+        selectedNodeId: nodeId,
+      }))
+    } catch (e) {
+      set({ regeneratingId: null, error: `重新生成失败：${(e as Error).message}` })
+    }
+  },
+
+  setVersion: async (nodeId, versionId) => {
+    const { projectId } = get()
+    const api = window.diverge
+    if (!api || !projectId) {
+      set({ error: '需要主进程支持才能翻案。' })
+      return
+    }
+    try {
+      const updated = await api.setNodeVersion({ projectId, nodeId, versionId })
+      set((s) => ({ nodes: mergeNode(s.nodes, updated), selectedNodeId: nodeId, error: null }))
+    } catch (e) {
+      set({ error: `翻案失败：${(e as Error).message}` })
     }
   },
 }))

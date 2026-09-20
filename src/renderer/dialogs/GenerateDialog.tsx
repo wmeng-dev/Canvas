@@ -26,11 +26,13 @@ export function GenerateDialog() {
   const [prompt, setPrompt] = useState('')
   const [generatorId, setGeneratorId] = useState('')
   const [contentType, setContentType] = useState<ContentType>('markdown')
+  const [count, setCount] = useState(1)
 
   // 每次打开时重置输入，并默认选中首个生成器
   useEffect(() => {
     if (open) {
       setPrompt('')
+      setCount(1)
       setGeneratorId((prev) => prev || generators[0]?.id || '')
     }
   }, [open, generators])
@@ -144,6 +146,33 @@ export function GenerateDialog() {
           </select>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+          <label style={{ fontSize: 12, color: '#7d8590' }}>一次发散</label>
+          <select
+            data-testid="count-select"
+            value={count}
+            onChange={(e) => setCount(Number(e.target.value))}
+            style={{
+              width: 96,
+              background: '#010409',
+              color: '#e6edf3',
+              border: '1px solid #30363d',
+              borderRadius: 6,
+              padding: '6px 8px',
+              fontSize: 12,
+            }}
+          >
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>
+                {n} 条
+              </option>
+            ))}
+          </select>
+          <span style={{ fontSize: 11, color: '#7d8590' }}>
+            {count > 1 ? '多条并发，旧节点保留' : '单条生成'}
+          </span>
+        </div>
+
         {error && (
           <p data-testid="dialog-error" style={{ color: '#f85149', fontSize: 12, margin: '12px 0 0' }}>
             {error}
@@ -168,7 +197,7 @@ export function GenerateDialog() {
           </button>
           <button
             data-testid="submit-generate"
-            onClick={() => generate(prompt, generatorId || undefined, contentType)}
+            onClick={() => generate(prompt, generatorId || undefined, contentType, count)}
             disabled={generating}
             style={{
               background: generating ? '#1f6feb88' : '#1f6feb',

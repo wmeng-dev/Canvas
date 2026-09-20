@@ -18,26 +18,30 @@ function escapeHtml(s: string): string {
 
 const LIST_ITEMS = ['占位内容 1', '占位内容 2', '占位内容 3']
 
-function markdownHeading(subject: string): string {
-  return `# ${subject}\n\n${LIST_ITEMS.map((i) => `- ${i}`).join('\n')}`
+function markdownHeading(subject: string, seq: number): string {
+  // 注意：markdown 预览不解析内嵌 HTML（安全取舍），所以版本标记必须用 markdown 原生语法，
+  // 否则 <sub> 会原样显示出来。
+  return `# ${subject}\n\n${LIST_ITEMS.map((i) => `- ${i}`).join('\n')}\n\n*（占位生成 #${seq}）*`
 }
 
-function plainText(subject: string): string {
-  return `${subject}\n\n${LIST_ITEMS.join('\n')}`
+function plainText(subject: string, seq: number): string {
+  return `${subject}\n\n${LIST_ITEMS.join('\n')}\n\n占位生成 #${seq}`
 }
 
-function htmlBody(subject: string): string {
+function htmlBody(subject: string, seq: number): string {
   return `<!doctype html><meta charset="utf-8">
 <style>
   body { font-family: system-ui, "Microsoft YaHei", sans-serif; margin: 0; padding: 14px; color: #111; }
   h1 { font-size: 17px; margin: 0 0 10px; }
   ul { padding-left: 20px; margin: 0; }
+  footer { margin-top: 10px; font-size: 11px; color: #666; }
 </style>
 <h1>${subject}</h1>
-<ul>${LIST_ITEMS.map((i) => `<li>${i}</li>`).join('')}</ul>`
+<ul>${LIST_ITEMS.map((i) => `<li>${i}</li>`).join('')}</ul>
+<footer>占位生成 #${seq}</footer>`
 }
 
-function svgBody(label: string, extraRaw: string): string {
+function svgBody(label: string, seq: number, extraRaw: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 200" width="100%" height="100%">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
@@ -48,7 +52,7 @@ function svgBody(label: string, extraRaw: string): string {
   <rect x="8" y="8" width="344" height="184" rx="14" fill="url(#g)"/>
   <circle cx="76" cy="76" r="30" fill="#ffffff" fill-opacity="0.85"/>
   <text x="180" y="120" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" fill="#ffffff">${label}</text>
-  <text x="180" y="146" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#ffffff" fill-opacity="0.8">SVG 占位生成结果</text>
+  <text x="180" y="146" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#ffffff" fill-opacity="0.8">SVG 占位生成 #${seq}</text>
   ${extraRaw}
 </svg>`
 }
@@ -58,12 +62,15 @@ export function createFakeGenerator(
   label = '本地占位生成器',
 ): Generator {
   const echo = process.env.DIVERGE_FAKE_ECHO === '1'
+  // 每次生成递增：让"重新生成"产出的版本彼此可区分（真实模型也不会两次完全一样）
+  let seq = 0
 
   return {
     id,
     label,
     kind: 'direct',
     async generate(spec: NodeSpec): Promise<NodeContent> {
+      const n = ++seq
       const type: ContentType = spec.contentType ?? 'markdown'
       const raw = spec.prompt.trim() || '（空提示）'
       // 正常模式转义；echo 模式保持原样（供沙箱安全性测试注入真载荷）
@@ -77,21 +84,21 @@ export function createFakeGenerator(
           const quote = parentRaw
             ? `<blockquote style="margin:10px 0 0;padding:6px 10px;border-left:3px solid #999;color:#444;font-size:12px">基于父节点：${parentSafe}</blockquote>`
             : ''
-          text = htmlBody(subject).replace('</ul>', `</ul>${quote}`)
+          text = htmlBody(subject, n).replace('</footer>', `</footer>${quote}`)
           break
         }
         case 'svg': {
-          const label = escapeHtml(raw.length > 22 ? `${raw.slice(0, 22)}…` : raw)
+          const short = raw.length > 22 ? `${raw.slice(0, 22)}…` : raw
           const extra = echo && /[<>&]/.test(raw) ? raw : ''
-          text = svgBody(label, extra)
+          text = svgBody(escapeHtml(short), n, extra)
           break
         }
         case 'text':
-          text = `${plainText(subject)}${parentRaw ? `\n\n基于父节点：${parentSafe}` : ''}`
+          text = `${plainText(subject, n)}${parentRaw ? `\n\n基于父节点：${parentSafe}` : ''}`
           break
         case 'markdown':
         default:
-          text = `${markdownHeading(subject)}${parentRaw ? `\n\n> 基于父节点：${parentSafe}` : ''}`
+          text = `${markdownHeading(subject, n)}${parentRaw ? `\n\n> 基于父节点：${parentSafe}` : ''}`
           break
       }
 

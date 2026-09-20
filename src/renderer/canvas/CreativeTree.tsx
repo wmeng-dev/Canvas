@@ -1,5 +1,5 @@
-// C.1/C.2/C.3 画布：用 @xyflow/react 渲染创意树，节点/边/选中态由 Zustand store 驱动。
-// 新增节点后自动 fitView，避免新节点落在视口外（初次 fitView 只覆盖初始节点）。
+// C.1/C.2/C.3/C.5 画布：用 @xyflow/react 渲染创意树，节点/边/选中态由 Zustand store 驱动。
+// 新节点后自动 fitView；右键节点弹出上下文菜单（发散 / 重新生成）。
 
 import { useEffect, useRef } from 'react'
 import { Background, Controls, MiniMap, ReactFlow, useReactFlow } from '@xyflow/react'
@@ -13,6 +13,8 @@ export function CreativeTree() {
   const onEdgesChange = useTreeStore((s) => s.onEdgesChange)
   const onConnect = useTreeStore((s) => s.onConnect)
   const selectNode = useTreeStore((s) => s.selectNode)
+  const openMenu = useTreeStore((s) => s.openMenu)
+  const closeMenu = useTreeStore((s) => s.closeMenu)
 
   const { fitView } = useReactFlow()
   const prevCount = useRef(0)
@@ -35,8 +37,20 @@ export function CreativeTree() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onNodeClick={(_, node) => selectNode(node.id)}
-        onPaneClick={() => selectNode(null)}
+        onNodeClick={(_, node) => {
+          closeMenu()
+          selectNode(node.id)
+        }}
+        onNodeContextMenu={(e, node) => {
+          e.preventDefault()
+          selectNode(node.id)
+          openMenu(node.id, e.clientX, e.clientY)
+        }}
+        onPaneClick={() => {
+          closeMenu()
+          selectNode(null)
+        }}
+        onMoveStart={() => closeMenu()}
         fitView
       >
         <Background />

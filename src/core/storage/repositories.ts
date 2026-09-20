@@ -1,6 +1,12 @@
 import { randomUUID } from 'crypto'
 import { JsonStore } from './store'
-import type { Project, ProjectFile, TreeNode, TreeEdge } from '../../shared/types'
+import type {
+  NodeVersion,
+  Project,
+  ProjectFile,
+  TreeNode,
+  TreeEdge,
+} from '../../shared/types'
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -9,10 +15,40 @@ function nowIso(): string {
 export type NewNodeInput = Partial<TreeNode> & {
   label: string
   parentId?: string | null
+  /** 生成该内容的模型名（写入首个版本） */
+  model?: string
+}
+
+export interface NewVersionInput {
+  content: string
+  contentType?: TreeNode['contentType']
+  generatorId?: string | null
+  model?: string
 }
 
 /**
- * 高层仓储：项目 / 节点 / 边的 CRUD。
+ * 向后兼容：早期版本的项目文件没有 content 类型 / 版本字段。
+ * 就地补齐（仅内存，读时幂等；合成的首版 id 由 nodeId 派生，稳定可复现）。
+ */
+function migrateNode(n: TreeNode): void {
+  if (!n.contentType) n.contentType = 'markdown'
+  if (!Array.isArray(n.versions)) n.versions = []
+  if (n.versions.length === 0 && n.content) {
+    n.versions.push({
+      id: `${n.id}-v1`,
+      content: n.content,
+      contentType: n.contentType,
+      generatorId: n.generatorId,
+      createdAt: n.createdAt,
+    })
+  }
+  if (!n.currentVersionId) {
+    n.currentVersionId = n.versions.length ? n.versions[n.versions.length - 1].id : null
+  }
+}
+
+/**
+ * 高层仓储：项目 / 节点 / 版本 / 边的 CRUD。
  * 所有写操作经 JsonStore 落盘（原子替换），并维护 project.updatedAt。
  */
 export class ProjectRepository {
@@ -36,7 +72,9 @@ export class ProjectRepository {
   }
 
   get(id: string): ProjectFile {
-    return this.store.read<ProjectFile>(id)
+    const file = this.store.read<ProjectFile>(id)
+    for (const n of file.tree.nodes) migrateNode(n)
+    return file
   }
 
   list(): Project[] {
@@ -71,10 +109,26 @@ export class ProjectRepository {
       contentType: input.contentType ?? 'markdown',
       status: input.status ?? 'empty',
       generatorId: input.generatorId ?? null,
+      versions: [],
+      currentVersionId: null,
       position: input.position,
       createdAt: ts,
       updatedAt: ts,
     }
+    // 有初始内容就落一个版本，使"版本历史"从第一天起就成立
+    if (node.content) {
+      const version: NodeVersion = {
+        id: randomUUID(),
+        content: node.content,
+        contentType: node.contentType,
+        generatorId: node.generatorId,
+        model: input.model,
+        createdAt: ts,
+      }
+      node.versions.push(version)
+      node.currentVersionId = version.id
+    }
+
     file.tree.nodes.push(node)
     if (node.parentId) {
       file.tree.edges.push({
@@ -94,6 +148,52 @@ export class ProjectRepository {
     if (!node) throw new Error(`Node not found: ${nodeId}`)
     Object.assign(node, patch, { updatedAt: nowIso() })
     file.project.updatedAt = nowIso()
+    this.store.write(projectId, file)
+    return node
+  }
+
+  /**
+   * 追加一个内容版本并设为当前（"重新生成"用）。
+   * 旧版本一律保留 —— 这是"可翻案"的前提。
+   */
+  addVersion(projectId: string, nodeId: string, input: NewVersionInput): TreeNode {
+    const file = this.get(projectId)
+    const node = file.tree.nodes.find((n) => n.id === nodeId)
+    if (!node) throw new Error(`Node not found: ${nodeId}`)
+    const ts = nowIso()
+    const version: NodeVersion = {
+      id: randomUUID(),
+      content: input.content,
+      contentType: input.contentType ?? node.contentType,
+      generatorId: input.generatorId ?? node.generatorId,
+      model: input.model,
+      createdAt: ts,
+    }
+    node.versions.push(version)
+    node.currentVersionId = version.id
+    node.content = version.content
+    node.contentType = version.contentType
+    if (version.generatorId) node.generatorId = version.generatorId
+    node.status = 'done'
+    node.updatedAt = ts
+    file.project.updatedAt = ts
+    this.store.write(projectId, file)
+    return node
+  }
+
+  /** 翻案：把当前版本指回某个历史版本（不删除、不覆盖任何版本）。 */
+  setCurrentVersion(projectId: string, nodeId: string, versionId: string): TreeNode {
+    const file = this.get(projectId)
+    const node = file.tree.nodes.find((n) => n.id === nodeId)
+    if (!node) throw new Error(`Node not found: ${nodeId}`)
+    const version = node.versions.find((v) => v.id === versionId)
+    if (!version) throw new Error(`Version not found: ${versionId}`)
+    node.currentVersionId = version.id
+    node.content = version.content
+    node.contentType = version.contentType
+    node.generatorId = version.generatorId
+    node.updatedAt = nowIso()
+    file.project.updatedAt = node.updatedAt
     this.store.write(projectId, file)
     return node
   }

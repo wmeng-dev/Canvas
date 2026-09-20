@@ -1,4 +1,4 @@
-// C.2/C.4 预览面板：显示当前选中节点，并按 contentType 选择预览方式。
+// C.2/C.4/C.5 预览面板：选中节点 → 按 contentType 预览 + 版本历史（可翻案）+ 重新生成。
 // 类型分发见 previews/ContentPreview.tsx。
 
 import { useTreeStore } from '../store/treeStore'
@@ -13,13 +13,36 @@ const TYPE_LABEL: Record<ContentType, string> = {
   image: '图片',
 }
 
+function shortTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 export function PreviewPanel() {
   const node = useTreeStore(
     (s) => s.nodes.find((n) => n.id === s.selectedNodeId) ?? null,
   )
   const openDialog = useTreeStore((s) => s.openDialog)
+  const regenerate = useTreeStore((s) => s.regenerate)
+  const setVersion = useTreeStore((s) => s.setVersion)
+  const regeneratingId = useTreeStore((s) => s.regeneratingId)
 
   const contentType = (node?.data.contentType ?? 'markdown') as ContentType
+  const versions = node?.data.versions ?? []
+  const currentVersionId = node?.data.currentVersionId ?? null
+  const busy = !!node && regeneratingId === node.id
+
+  const btn: React.CSSProperties = {
+    background: 'transparent',
+    color: '#58a6ff',
+    border: '1px solid #30363d',
+    borderRadius: 6,
+    padding: '3px 10px',
+    fontSize: 12,
+    cursor: 'pointer',
+  }
 
   return (
     <aside
@@ -46,7 +69,8 @@ export function PreviewPanel() {
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6, color: '#e6edf3' }}>
             {node.data.label}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
             <span
               data-testid="preview-type"
               style={{
@@ -60,24 +84,87 @@ export function PreviewPanel() {
             >
               {TYPE_LABEL[contentType]}
             </span>
-            <button
-              data-testid="branch-from-node"
-              onClick={() => openDialog(node.id)}
-              style={{
-                background: 'transparent',
-                color: '#58a6ff',
-                border: '1px solid #30363d',
-                borderRadius: 6,
-                padding: '3px 10px',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
-            >
+            <button data-testid="branch-from-node" onClick={() => openDialog(node.id)} style={btn}>
               从这里发散
+            </button>
+            <button
+              data-testid="regenerate-node"
+              disabled={busy}
+              onClick={() => void regenerate(node.id)}
+              style={{ ...btn, color: busy ? '#7d8590' : '#58a6ff', cursor: busy ? 'wait' : 'pointer' }}
+            >
+              {busy ? '重新生成中…' : '重新生成'}
             </button>
           </div>
 
           <ContentPreview contentType={contentType} content={node.data.content ?? ''} />
+
+          {versions.length > 0 && (
+            <div data-testid="version-history" style={{ marginTop: 20 }}>
+              <h3
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                  color: '#7d8590',
+                  margin: '0 0 8px',
+                  borderTop: '1px solid #21262d',
+                  paddingTop: 12,
+                }}
+              >
+                版本历史（{versions.length}）
+              </h3>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {[...versions].reverse().map((v) => {
+                  const index = versions.indexOf(v) + 1
+                  const isCurrent = v.id === currentVersionId
+                  return (
+                    <li
+                      key={v.id}
+                      data-testid="version-item"
+                      data-current={isCurrent ? '1' : '0'}
+                      data-version={index}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 8px',
+                        marginBottom: 4,
+                        borderRadius: 6,
+                        background: isCurrent ? '#1f6feb1a' : '#161b22',
+                        border: `1px solid ${isCurrent ? '#1f6feb55' : '#21262d'}`,
+                        fontSize: 12,
+                        color: '#c9d1d9',
+                      }}
+                    >
+                      <span style={{ fontWeight: 600 }}>v{index}</span>
+                      <span style={{ color: '#7d8590', fontSize: 11 }}>{shortTime(v.createdAt)}</span>
+                      <span style={{ flex: 1 }} />
+                      {isCurrent ? (
+                        <span style={{ color: '#58a6ff', fontSize: 11 }}>当前</span>
+                      ) : (
+                        <button
+                          data-testid="version-revert"
+                          data-version={index}
+                          onClick={() => void setVersion(node.id, v.id)}
+                          style={{
+                            background: 'transparent',
+                            color: '#58a6ff',
+                            border: '1px solid #30363d',
+                            borderRadius: 4,
+                            padding: '1px 8px',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          翻案
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </aside>

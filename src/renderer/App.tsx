@@ -1,8 +1,9 @@
-// C.3 应用外壳：顶栏（项目名 + 新增想法）+ 画布 + 预览面板 + 生成对话框。
+// C.3/C.5 应用外壳：顶栏 + 画布 + 预览面板 + 生成对话框 + 节点右键菜单。
 
 import { useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { CreativeTree } from './canvas/CreativeTree'
+import { NodeContextMenu } from './canvas/NodeContextMenu'
 import { PreviewPanel } from './panels/PreviewPanel'
 import { GenerateDialog } from './dialogs/GenerateDialog'
 import { useTreeStore } from './store/treeStore'
@@ -12,6 +13,9 @@ export function App() {
   const init = useTreeStore((s) => s.init)
   const openDialog = useTreeStore((s) => s.openDialog)
   const error = useTreeStore((s) => s.error)
+  const clearError = useTreeStore((s) => s.clearError)
+  const warning = useTreeStore((s) => s.warning)
+  const clearWarning = useTreeStore((s) => s.clearWarning)
 
   useEffect(() => {
     void init()
@@ -55,15 +59,34 @@ export function App() {
         {error && (
           <div
             data-testid="app-error"
+            onClick={clearError}
             style={{
               padding: '6px 16px',
               background: '#3d1418',
               color: '#f85149',
               fontSize: 12,
               borderBottom: '1px solid #21262d',
+              cursor: 'pointer',
             }}
           >
-            {error}
+            {error}（点击关闭）
+          </div>
+        )}
+
+        {warning && (
+          <div
+            data-testid="app-warning"
+            onClick={clearWarning}
+            style={{
+              padding: '6px 16px',
+              background: '#3a2d0b',
+              color: '#d29922',
+              fontSize: 12,
+              borderBottom: '1px solid #21262d',
+              cursor: 'pointer',
+            }}
+          >
+            {warning}（点击关闭）
           </div>
         )}
 
@@ -76,6 +99,7 @@ export function App() {
       </div>
 
       <GenerateDialog />
+      <NodeContextMenu />
     </ReactFlowProvider>
   )
 }
