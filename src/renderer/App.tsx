@@ -1,4 +1,4 @@
-// C.3/C.5 应用外壳：顶栏 + 画布 + 预览面板 + 生成对话框 + 节点右键菜单。
+// C.3/C.5/D.1 应用外壳：顶栏 + 画布 + 预览面板 + 生成对话框 + 导出对话框 + 节点右键菜单。
 
 import { useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
@@ -7,6 +7,7 @@ import { NodeContextMenu } from './canvas/NodeContextMenu'
 import { PreviewPanel } from './panels/PreviewPanel'
 import { AiSettingsPanel } from './panels/AiSettingsPanel'
 import { GenerateDialog } from './dialogs/GenerateDialog'
+import { ExportDialog } from './dialogs/ExportDialog'
 import { useTreeStore } from './store/treeStore'
 
 export function App() {
@@ -14,6 +15,7 @@ export function App() {
   const init = useTreeStore((s) => s.init)
   const openDialog = useTreeStore((s) => s.openDialog)
   const openAi = useTreeStore((s) => s.openAi)
+  const openExport = useTreeStore((s) => s.openExport)
   const generators = useTreeStore((s) => s.generators)
   const error = useTreeStore((s) => s.error)
   const clearError = useTreeStore((s) => s.clearError)
@@ -56,6 +58,22 @@ export function App() {
             }}
           >
             AI 后端{generators.length > 0 ? `（${generators.length}）` : ''}
+          </button>
+          <button
+            data-testid="open-export"
+            onClick={openExport}
+            style={{
+              background: 'transparent',
+              color: '#c9d1d9',
+              border: '1px solid #30363d',
+              borderRadius: 6,
+              padding: '6px 12px',
+              fontSize: 13,
+              cursor: 'pointer',
+              marginRight: 8,
+            }}
+          >
+            导出
           </button>
           <button
             data-testid="new-idea"
@@ -118,6 +136,7 @@ export function App() {
       </div>
 
       <GenerateDialog />
+      <ExportDialog />
       <NodeContextMenu />
       <AiSettingsPanel />
     </ReactFlowProvider>

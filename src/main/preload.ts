@@ -8,6 +8,7 @@ import type {
   DivergeApi,
   GenerateNodeRequest,
   RegenerateNodeRequest,
+  SaveExportRequest,
   SetNodeVersionRequest,
 } from '../shared/ipc'
 
@@ -25,6 +26,8 @@ const api: DivergeApi = {
   removeMcpServer: (id: string) => ipcRenderer.invoke(IPC.removeMcpServer, id),
   setMcpServerEnabled: (id: string, enabled: boolean) =>
     ipcRenderer.invoke(IPC.setMcpServerEnabled, id, enabled),
+
+  saveExport: (req: SaveExportRequest) => ipcRenderer.invoke(IPC.saveExport, req),
 }
 
 contextBridge.exposeInMainWorld('diverge', api)

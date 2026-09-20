@@ -18,6 +18,7 @@ userData/
 .a*.log
 # Local verification artifacts (electron screenshots / probes)
 /canvas-screenshot.png
+/export-html-screenshot.png
 probe-*.cjs
 # OS
 Thumbs.db

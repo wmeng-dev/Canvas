@@ -56,6 +56,9 @@ interface TreeState {
   aiSettings: AiSettingsView | null
   aiBusy: boolean
 
+  /** D.1 导出对话框 */
+  exportOpen: boolean
+
   init: () => Promise<void>
 
   onNodesChange: (changes: NodeChange<CreativeNode>[]) => void
@@ -84,6 +87,10 @@ interface TreeState {
   addMcpServer: (req: AddMcpServerRequest) => Promise<void>
   removeMcpServer: (id: string) => Promise<void>
   setMcpServerEnabled: (id: string, enabled: boolean) => Promise<void>
+
+  // --- D.1 导出 ---
+  openExport: () => void
+  closeExport: () => void
 }
 
 const seedNodes: CreativeNode[] = [
@@ -173,6 +180,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   aiOpen: false,
   aiSettings: null,
   aiBusy: false,
+  exportOpen: false,
 
   init: async () => {
     const api = window.diverge
@@ -408,4 +416,8 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       set({ aiBusy: false, error: `${enabled ? '启用' : '停用'} MCP Server 失败：${(e as Error).message}` })
     }
   },
+
+  // ---------------- D.1 导出 ----------------
+  openExport: () => set({ exportOpen: true }),
+  closeExport: () => set({ exportOpen: false }),
 }))

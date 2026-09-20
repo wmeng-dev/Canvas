@@ -16,6 +16,7 @@ export const IPC = {
   addMcpServer: 'diverge:addMcpServer',
   removeMcpServer: 'diverge:removeMcpServer',
   setMcpServerEnabled: 'diverge:setMcpServerEnabled',
+  saveExport: 'diverge:saveExport',
 } as const
 
 export interface GeneratorInfo {
@@ -81,6 +82,25 @@ export interface AddMcpServerRequest {
   enabled?: boolean
 }
 
+/**
+ * D.1 导出：渲染端负责把文档渲染成最终字符串（Markdown 或单文件 HTML），
+ * 主进程只负责弹系统保存对话框 + 落盘 —— 这样渲染逻辑（含 markdown→HTML）留在
+ * 渲染端复用现有预览组件，主进程保持无渲染依赖。
+ */
+export interface SaveExportRequest {
+  /** 建议文件名；用户可在系统对话框里改 */
+  suggestedName: string
+  /** 完整文件内容 */
+  content: string
+}
+
+export interface SaveExportResponse {
+  saved: boolean
+  /** 用户取消时为 undefined */
+  path?: string
+  error?: string
+}
+
 /** preload 暴露到 window.diverge 的 API 面 */
 export interface DivergeApi {
   listGenerators(): Promise<GeneratorInfo[]>
@@ -97,4 +117,7 @@ export interface DivergeApi {
   addMcpServer(req: AddMcpServerRequest): Promise<AiSettingsView>
   removeMcpServer(id: string): Promise<AiSettingsView>
   setMcpServerEnabled(id: string, enabled: boolean): Promise<AiSettingsView>
+
+  // --- D.1 导出 ---
+  saveExport(req: SaveExportRequest): Promise<SaveExportResponse>
 }

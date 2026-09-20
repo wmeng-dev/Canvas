@@ -1,12 +1,14 @@
 // C.3/C.5/C.6 主进程 IPC handlers：把渲染端请求路由到 core 层（生成器 + 存储 + AI 后端设置）。
 
 import { randomUUID } from 'crypto'
-import { ipcMain } from 'electron'
+import * as fs from 'fs'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '../../shared/ipc'
 import type {
   AddMcpServerRequest,
   GenerateNodeRequest,
   RegenerateNodeRequest,
+  SaveExportRequest,
   SetNodeVersionRequest,
 } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
@@ -93,6 +95,31 @@ export function registerIpcHandlers(svc: AppServices): void {
       mcpServers: s.mcpServers.map((m) => (m.id === id ? { ...m, enabled: !!enabled } : m)),
     }))
     return syncAndView(svc)
+  })
+
+  // ---------- D.1 导出 ----------
+  // 内容由渲染端渲染好（复用预览组件），这里只负责系统保存对话框 + 落盘。
+  ipcMain.handle(IPC.saveExport, async (evt, req: SaveExportRequest) => {
+    const content = String(req?.content ?? '')
+    const suggestedName = String(req?.suggestedName ?? '').trim() || 'export.md'
+    const isHtml = suggestedName.toLowerCase().endsWith('.html')
+    const filters = isHtml
+      ? [{ name: 'HTML 文档', extensions: ['html'] }]
+      : [{ name: 'Markdown 文档', extensions: ['md', 'markdown'] }]
+
+    const parent = BrowserWindow.fromWebContents(evt.sender)
+    const opts = { defaultPath: suggestedName, filters }
+    const result = parent
+      ? await dialog.showSaveDialog(parent, opts)
+      : await dialog.showSaveDialog(opts)
+
+    if (result.canceled || !result.filePath) return { saved: false }
+    try {
+      await fs.promises.writeFile(result.filePath, content, 'utf-8')
+      return { saved: true, path: result.filePath }
+    } catch (e) {
+      return { saved: false, error: (e as Error).message }
+    }
   })
 }
 
