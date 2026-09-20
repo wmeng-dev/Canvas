@@ -1,25 +1,29 @@
-// C.1 画布基础渲染：用 @xyflow/react 渲染写死的节点与连线。
-// 当前为静态数据；C.2 起接入 Zustand store，C.3 起接入生成链路。
+// C.1/C.2 画布：用 @xyflow/react 渲染创意树，节点/边/选中态由 Zustand store 驱动。
 
 import { Background, Controls, MiniMap, ReactFlow } from '@xyflow/react'
-import type { Edge, Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-
-const initialNodes: Node[] = [
-  { id: 'root', position: { x: 0, y: 0 }, data: { label: '创意主题' } },
-  { id: 'a', position: { x: 280, y: -120 }, data: { label: '方向 A' } },
-  { id: 'b', position: { x: 280, y: 120 }, data: { label: '方向 B' } },
-]
-
-const initialEdges: Edge[] = [
-  { id: 'root-a', source: 'root', target: 'a', animated: true },
-  { id: 'root-b', source: 'root', target: 'b', animated: true },
-]
+import { useTreeStore } from '../store/treeStore'
 
 export function CreativeTree() {
+  const nodes = useTreeStore((s) => s.nodes)
+  const edges = useTreeStore((s) => s.edges)
+  const onNodesChange = useTreeStore((s) => s.onNodesChange)
+  const onEdgesChange = useTreeStore((s) => s.onEdgesChange)
+  const onConnect = useTreeStore((s) => s.onConnect)
+  const selectNode = useTreeStore((s) => s.selectNode)
+
   return (
     <div style={{ width: '100%', height: '100%' }}>
-      <ReactFlow nodes={initialNodes} edges={initialEdges} fitView>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={(_, node) => selectNode(node.id)}
+        onPaneClick={() => selectNode(null)}
+        fitView
+      >
         <Background />
         <Controls />
         <MiniMap />
