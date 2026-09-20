@@ -3,14 +3,14 @@
     "target": "ES2020",
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "outDir": "dist-electron",
+    "outDir": "dist-test",
     "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "sourceMap": true,
+    "noEmit": false,
     "types": ["node"]
   },
-  "include": ["src/main", "src/core", "src/shared"]
+  "include": ["src/core", "src/shared"]
 }
