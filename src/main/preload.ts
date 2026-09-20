@@ -1,9 +1,10 @@
-// C.3/C.5 preload：在 contextIsolation 下，仅向渲染端暴露最小 API 面（window.diverge）。
+// C.3/C.5/C.6 preload：在 contextIsolation 下，仅向渲染端暴露最小 API 面（window.diverge）。
 // 不暴露 ipcRenderer 本体，渲染端只能调用白名单内的方法。
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
 import type {
+  AddMcpServerRequest,
   DivergeApi,
   GenerateNodeRequest,
   RegenerateNodeRequest,
@@ -16,6 +17,14 @@ const api: DivergeApi = {
   generateNode: (req: GenerateNodeRequest) => ipcRenderer.invoke(IPC.generateNode, req),
   regenerateNode: (req: RegenerateNodeRequest) => ipcRenderer.invoke(IPC.regenerateNode, req),
   setNodeVersion: (req: SetNodeVersionRequest) => ipcRenderer.invoke(IPC.setNodeVersion, req),
+
+  getAiSettings: () => ipcRenderer.invoke(IPC.getAiSettings),
+  setDeepSeekKey: (apiKey: string) => ipcRenderer.invoke(IPC.setDeepSeekKey, apiKey),
+  clearDeepSeekKey: () => ipcRenderer.invoke(IPC.clearDeepSeekKey),
+  addMcpServer: (req: AddMcpServerRequest) => ipcRenderer.invoke(IPC.addMcpServer, req),
+  removeMcpServer: (id: string) => ipcRenderer.invoke(IPC.removeMcpServer, id),
+  setMcpServerEnabled: (id: string, enabled: boolean) =>
+    ipcRenderer.invoke(IPC.setMcpServerEnabled, id, enabled),
 }
 
 contextBridge.exposeInMainWorld('diverge', api)

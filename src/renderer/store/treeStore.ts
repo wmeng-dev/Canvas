@@ -5,7 +5,8 @@
 import { create } from 'zustand'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
-import type { GeneratorInfo } from '../../shared/ipc'
+import type { AddMcpServerRequest, GeneratorInfo } from '../../shared/ipc'
+import type { AiSettingsView } from '../../shared/settings'
 import type { ContentType, NodeVersion, ProjectFile, TreeNode } from '../../shared/types'
 
 export interface CreativeNodeData extends Record<string, unknown> {
@@ -50,6 +51,11 @@ interface TreeState {
   /** 正在重新生成的节点 id */
   regeneratingId: string | null
 
+  /** C.6 AI 后端设置面板 */
+  aiOpen: boolean
+  aiSettings: AiSettingsView | null
+  aiBusy: boolean
+
   init: () => Promise<void>
 
   onNodesChange: (changes: NodeChange<CreativeNode>[]) => void
@@ -68,6 +74,16 @@ interface TreeState {
   generate: (prompt: string, generatorId?: string, contentType?: ContentType, count?: number) => Promise<void>
   regenerate: (nodeId: string) => Promise<void>
   setVersion: (nodeId: string, versionId: string) => Promise<void>
+
+  // --- C.6 AI 后端设置 ---
+  openAi: () => void
+  closeAi: () => void
+  loadAiSettings: () => Promise<void>
+  setDeepSeekKey: (apiKey: string) => Promise<void>
+  clearDeepSeekKey: () => Promise<void>
+  addMcpServer: (req: AddMcpServerRequest) => Promise<void>
+  removeMcpServer: (id: string) => Promise<void>
+  setMcpServerEnabled: (id: string, enabled: boolean) => Promise<void>
 }
 
 const seedNodes: CreativeNode[] = [
@@ -154,6 +170,9 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   warning: null,
   menu: null,
   regeneratingId: null,
+  aiOpen: false,
+  aiSettings: null,
+  aiBusy: false,
 
   init: async () => {
     const api = window.diverge
@@ -310,6 +329,83 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       set((s) => ({ nodes: mergeNode(s.nodes, updated), selectedNodeId: nodeId, error: null }))
     } catch (e) {
       set({ error: `翻案失败：${(e as Error).message}` })
+    }
+  },
+
+  // ---------------- C.6 AI 后端设置 ----------------
+  openAi: () => {
+    set({ aiOpen: true })
+    void get().loadAiSettings()
+  },
+  closeAi: () => set({ aiOpen: false }),
+
+  loadAiSettings: async () => {
+    const api = window.diverge
+    if (!api) return
+    try {
+      set({ aiSettings: await api.getAiSettings() })
+    } catch (e) {
+      set({ error: `读取 AI 设置失败：${(e as Error).message}` })
+    }
+  },
+
+  setDeepSeekKey: async (apiKey) => {
+    const api = window.diverge
+    if (!api) return
+    set({ aiBusy: true, error: null })
+    try {
+      const aiSettings = await api.setDeepSeekKey(apiKey)
+      set({ aiSettings, generators: await api.listGenerators(), aiBusy: false })
+    } catch (e) {
+      set({ aiBusy: false, error: `保存密钥失败：${(e as Error).message}` })
+    }
+  },
+
+  clearDeepSeekKey: async () => {
+    const api = window.diverge
+    if (!api) return
+    set({ aiBusy: true, error: null })
+    try {
+      const aiSettings = await api.clearDeepSeekKey()
+      set({ aiSettings, generators: await api.listGenerators(), aiBusy: false })
+    } catch (e) {
+      set({ aiBusy: false, error: `清除密钥失败：${(e as Error).message}` })
+    }
+  },
+
+  addMcpServer: async (req) => {
+    const api = window.diverge
+    if (!api) return
+    set({ aiBusy: true, error: null })
+    try {
+      const aiSettings = await api.addMcpServer(req)
+      set({ aiSettings, generators: await api.listGenerators(), aiBusy: false })
+    } catch (e) {
+      set({ aiBusy: false, error: `添加 MCP Server 失败：${(e as Error).message}` })
+    }
+  },
+
+  removeMcpServer: async (id) => {
+    const api = window.diverge
+    if (!api) return
+    set({ aiBusy: true, error: null })
+    try {
+      const aiSettings = await api.removeMcpServer(id)
+      set({ aiSettings, generators: await api.listGenerators(), aiBusy: false })
+    } catch (e) {
+      set({ aiBusy: false, error: `删除 MCP Server 失败：${(e as Error).message}` })
+    }
+  },
+
+  setMcpServerEnabled: async (id, enabled) => {
+    const api = window.diverge
+    if (!api) return
+    set({ aiBusy: true, error: null })
+    try {
+      const aiSettings = await api.setMcpServerEnabled(id, enabled)
+      set({ aiSettings, generators: await api.listGenerators(), aiBusy: false })
+    } catch (e) {
+      set({ aiBusy: false, error: `${enabled ? '启用' : '停用'} MCP Server 失败：${(e as Error).message}` })
     }
   },
 }))

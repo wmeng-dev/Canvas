@@ -44,6 +44,11 @@ export class McpClientManager {
     return this.clients.has(id)
   }
 
+  /** 当前已建立的连接 id 列表（AI 后端设置变更时用来关掉不再启用的） */
+  connectedIds(): string[] {
+    return [...this.clients.keys()]
+  }
+
   async listTools(id: string): Promise<McpToolInfo[]> {
     const client = this.require(id)
     const res = await client.listTools()

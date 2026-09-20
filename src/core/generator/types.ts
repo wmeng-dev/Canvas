@@ -46,6 +46,11 @@ export class GeneratorRegistry {
     this.map.delete(id)
   }
 
+  /** 清空注册表（AI 后端设置变更后整体重建用） */
+  clear(): void {
+    this.map.clear()
+  }
+
   get(id: string): Generator | undefined {
     return this.map.get(id)
   }

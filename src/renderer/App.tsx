@@ -5,6 +5,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { CreativeTree } from './canvas/CreativeTree'
 import { NodeContextMenu } from './canvas/NodeContextMenu'
 import { PreviewPanel } from './panels/PreviewPanel'
+import { AiSettingsPanel } from './panels/AiSettingsPanel'
 import { GenerateDialog } from './dialogs/GenerateDialog'
 import { useTreeStore } from './store/treeStore'
 
@@ -12,6 +13,8 @@ export function App() {
   const projectName = useTreeStore((s) => s.projectName)
   const init = useTreeStore((s) => s.init)
   const openDialog = useTreeStore((s) => s.openDialog)
+  const openAi = useTreeStore((s) => s.openAi)
+  const generators = useTreeStore((s) => s.generators)
   const error = useTreeStore((s) => s.error)
   const clearError = useTreeStore((s) => s.clearError)
   const warning = useTreeStore((s) => s.warning)
@@ -38,6 +41,22 @@ export function App() {
           <span style={{ fontSize: 14, fontWeight: 600, color: '#e6edf3' }}>发散创意画布</span>
           <span style={{ fontSize: 12, color: '#7d8590' }}>{projectName}</span>
           <div style={{ flex: 1 }} />
+          <button
+            data-testid="open-ai"
+            onClick={openAi}
+            style={{
+              background: 'transparent',
+              color: '#c9d1d9',
+              border: '1px solid #30363d',
+              borderRadius: 6,
+              padding: '6px 12px',
+              fontSize: 13,
+              cursor: 'pointer',
+              marginRight: 8,
+            }}
+          >
+            AI 后端{generators.length > 0 ? `（${generators.length}）` : ''}
+          </button>
           <button
             data-testid="new-idea"
             onClick={() => openDialog(null)}
@@ -100,6 +119,7 @@ export function App() {
 
       <GenerateDialog />
       <NodeContextMenu />
+      <AiSettingsPanel />
     </ReactFlowProvider>
   )
 }

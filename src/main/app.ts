@@ -6,7 +6,8 @@ import * as path from 'path'
 import * as http from 'http'
 import { createServices } from '../core/services'
 import type { AppServices } from '../core/services'
-import { registerIpcHandlers } from './ipc/handlers'
+import { registerIpcHandlers, syncAiBackendsOnStartup } from './ipc/handlers'
+import { createSecretBox } from './secret-box'
 
 const DEV_SERVER_URL = 'http://localhost:5173'
 
@@ -14,10 +15,22 @@ const DEV_SERVER_URL = 'http://localhost:5173'
 export function createAppServices(): AppServices {
   const dataDir =
     process.env.DIVERGE_DATA_DIR || path.join(app.getPath('userData'), 'diverge')
+  // 本地示例 MCP Server：编译产物就在 dist-electron/core/mcp-server/ 下。
+  // 用 electron 自身的可执行文件当 Node 运行时 —— 子进程加 ELECTRON_RUN_AS_NODE=1 即退化为 Node，
+  // 这样打包后不必额外依赖系统 node。环境变量只写必要项（SDK 会自动合并安全默认值），
+  // 避免把整个 process.env（含其它密钥）落到 settings.json 里。
+  const exampleScript = path.join(__dirname, '../core/mcp-server/workbuddy-mcp-server.js')
   return createServices({
     dataDir,
+    secrets: createSecretBox(),
     deepseekApiKey: process.env.DEEPSEEK_API_KEY || undefined,
     fakeGenerator: process.env.DIVERGE_FAKE_GENERATOR === '1',
+    exampleMcpServer: {
+      name: '本地示例 Server',
+      command: process.execPath,
+      args: [exampleScript],
+      env: { ELECTRON_RUN_AS_NODE: '1', DIVERGE_MCP_FAKE: '1' },
+    },
   })
 }
 
@@ -74,11 +87,14 @@ export function createMainWindow(): BrowserWindow {
 }
 
 export function bootstrap(): void {
-  const services = createAppServices()
-
   app.whenReady().then(() => {
+    // 服务必须在 ready 之后装配：safeStorage 等 Electron API 在 ready 前不可用，
+    // 过早构造会让密钥封装误判为"无加密能力"而悄悄降级为明文（见 secret-box.ts）。
+    const services = createAppServices()
     registerIpcHandlers(services)
     createMainWindow()
+    // 后台接起已配置的 AI 后端（MCP 要拉子进程，不能阻塞开窗）
+    void syncAiBackendsOnStartup(services)
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
     })

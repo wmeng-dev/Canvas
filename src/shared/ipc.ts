@@ -2,6 +2,7 @@
 // 渲染端通过 window.diverge 访问（见 preload.ts）。
 
 import type { ContentType, ProjectFile, TreeEdge, TreeNode } from './types'
+import type { AiSettingsView } from './settings'
 
 export const IPC = {
   listGenerators: 'diverge:listGenerators',
@@ -9,6 +10,12 @@ export const IPC = {
   generateNode: 'diverge:generateNode',
   regenerateNode: 'diverge:regenerateNode',
   setNodeVersion: 'diverge:setNodeVersion',
+  getAiSettings: 'diverge:getAiSettings',
+  setDeepSeekKey: 'diverge:setDeepSeekKey',
+  clearDeepSeekKey: 'diverge:clearDeepSeekKey',
+  addMcpServer: 'diverge:addMcpServer',
+  removeMcpServer: 'diverge:removeMcpServer',
+  setMcpServerEnabled: 'diverge:setMcpServerEnabled',
 } as const
 
 export interface GeneratorInfo {
@@ -64,6 +71,16 @@ export interface SetNodeVersionRequest {
   versionId: string
 }
 
+/** C.6 新增 MCP server 的入参（id 由主进程生成，避免与既有冲突） */
+export interface AddMcpServerRequest {
+  name: string
+  command: string
+  args: string[]
+  env: Record<string, string>
+  cwd?: string
+  enabled?: boolean
+}
+
 /** preload 暴露到 window.diverge 的 API 面 */
 export interface DivergeApi {
   listGenerators(): Promise<GeneratorInfo[]>
@@ -71,4 +88,13 @@ export interface DivergeApi {
   generateNode(req: GenerateNodeRequest): Promise<GenerateChildrenResponse>
   regenerateNode(req: RegenerateNodeRequest): Promise<TreeNode>
   setNodeVersion(req: SetNodeVersionRequest): Promise<TreeNode>
+
+  // --- C.6 AI 后端设置 ---
+  getAiSettings(): Promise<AiSettingsView>
+  /** 保存 DeepSeek key（空字符串＝清除）；返回同步后的最新视图 */
+  setDeepSeekKey(apiKey: string): Promise<AiSettingsView>
+  clearDeepSeekKey(): Promise<AiSettingsView>
+  addMcpServer(req: AddMcpServerRequest): Promise<AiSettingsView>
+  removeMcpServer(id: string): Promise<AiSettingsView>
+  setMcpServerEnabled(id: string, enabled: boolean): Promise<AiSettingsView>
 }
