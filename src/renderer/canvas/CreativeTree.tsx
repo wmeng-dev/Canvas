@@ -100,6 +100,10 @@ export function CreativeTree() {
         }}
         onMoveStart={() => closeMenu()}
         fitView
+        // 去掉右下角那个第三方「React Flow」署名链接（.react-flow__attribution），与本产品无关。
+        // 注意：@xyflow 官方是希望"隐藏署名即订阅 React Flow Pro"（见 reactflow.dev/remove-attribution），
+        // 代码层面 MIT 且该开关是公开 API；如后续要合规，可考虑为上游订阅。
+        proOptions={{ hideAttribution: true }}
       >
         <Background />
         <Controls />
