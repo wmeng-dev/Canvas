@@ -17,6 +17,12 @@ export interface McpStdioServerConfig {
 export interface McpToolInfo {
   name: string
   description?: string
+  /**
+   * 该 tool 是否声明为只读（MCP 标准 annotations.readOnlyHint）。
+   * 用途：装配生成后端时**跳过只读工具** —— 它们是"读数据"的，不是"生成内容"的，
+   * 混进生成器下拉只会在被选中时报错（入参契约完全不同）。
+   */
+  readOnly?: boolean
 }
 
 export class McpClientManager {
@@ -52,7 +58,11 @@ export class McpClientManager {
   async listTools(id: string): Promise<McpToolInfo[]> {
     const client = this.require(id)
     const res = await client.listTools()
-    return res.tools.map((t) => ({ name: t.name, description: t.description }))
+    return res.tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      readOnly: t.annotations?.readOnlyHint === true,
+    }))
   }
 
   /** 调用工具并拼接返回的文本片段。isError 时抛出。 */

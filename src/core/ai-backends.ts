@@ -4,6 +4,7 @@
 import { DeepSeekGenerator } from './generator/direct/deepseek'
 import { createFakeGenerator } from './generator/fake'
 import { McpAdapter } from './mcp/McpAdapter'
+import type { McpToolInfo } from './mcp/McpClientManager'
 import { GeneratorRegistry } from './generator/types'
 import { maskSecret, openSecret } from './settings-store'
 import type { AppServices } from './services'
@@ -40,22 +41,26 @@ export async function syncAiBackends(svc: AppServices): Promise<McpServerStatus[
   }
 
   const statuses = new Map<string, McpServerStatus>()
+  // 保留工具明细（不只是名字）：装配生成器时要按 readOnly 过滤
+  const toolInfos = new Map<string, McpToolInfo[]>()
   for (const cfg of settings.mcpServers) {
     if (!cfg.enabled) {
       statuses.set(cfg.id, { id: cfg.id, state: 'disabled', tools: [] })
       continue
     }
     try {
-      const tools = svc.mcp.isConnected(cfg.id)
-        ? (await svc.mcp.listTools(cfg.id)).map((t) => t.name)
-        : await svc.mcp.connect({
-            id: cfg.id,
-            command: cfg.command,
-            args: cfg.args,
-            env: cfg.env,
-            cwd: cfg.cwd,
-          })
-      statuses.set(cfg.id, { id: cfg.id, state: 'connected', tools })
+      if (!svc.mcp.isConnected(cfg.id)) {
+        await svc.mcp.connect({
+          id: cfg.id,
+          command: cfg.command,
+          args: cfg.args,
+          env: cfg.env,
+          cwd: cfg.cwd,
+        })
+      }
+      const tools = await svc.mcp.listTools(cfg.id)
+      toolInfos.set(cfg.id, tools)
+      statuses.set(cfg.id, { id: cfg.id, state: 'connected', tools: tools.map((t) => t.name) })
     } catch (e) {
       statuses.set(cfg.id, {
         id: cfg.id,
@@ -75,9 +80,12 @@ export async function syncAiBackends(svc: AppServices): Promise<McpServerStatus[
   for (const cfg of settings.mcpServers) {
     const status = statuses.get(cfg.id)
     if (!status || status.state !== 'connected') continue
-    for (const tool of status.tools) {
+    for (const tool of toolInfos.get(cfg.id) ?? []) {
+      // 只读工具（annotations.readOnlyHint）不是"生成后端"：它读数据、不产出内容，
+      // 混进生成器下拉只会在被选中时报错（入参契约与 generate 完全不同）。
+      if (tool.readOnly) continue
       svc.registry.register(
-        new McpAdapter(svc.mcp, cfg.id, tool, `mcp:${cfg.id}:${tool}`, `${cfg.name} · ${tool}`),
+        new McpAdapter(svc.mcp, cfg.id, tool.name, `mcp:${cfg.id}:${tool.name}`, `${cfg.name} · ${tool.name}`),
       )
     }
   }

@@ -122,18 +122,38 @@ const EXAMPLE_SERVER = path.join(__dirname, '..', 'dist-test', 'core', 'mcp-serv
   const statuses = await syncAiBackends(svc)
   assert.strictEqual(statuses.length, 1)
   assert.strictEqual(statuses[0].state, 'connected', `expected connected, got ${statuses[0].state}: ${statuses[0].error}`)
-  assert.deepStrictEqual(statuses[0].tools, ['generate'])
+  // 示例 server 暴露 4 个 tool：1 个生成 + 3 个只读（list_projects/get_tree/get_node）
+  assert.deepStrictEqual(
+    [...statuses[0].tools].sort(),
+    ['generate', 'get_node', 'get_tree', 'list_projects'],
+    'discovered tools: ' + statuses[0].tools.join(','),
+  )
   assert.ok(svc.mcp.isConnected('demo'), 'manager holds the connection')
   const mcpGen = svc.registry.get('mcp:demo:generate')
-  assert.ok(mcpGen, 'adapter registered per tool')
+  assert.ok(mcpGen, 'adapter registered for the generate tool')
   assert.strictEqual(mcpGen.kind, 'mcp')
+  // 只读 tool 不得被当成"生成后端"：它们读数据、入参契约与 generate 完全不同，
+  // 混进生成器下拉只会在被选中时报错。靠 annotations.readOnlyHint 排除。
+  for (const n of ['list_projects', 'get_tree', 'get_node']) {
+    assert.strictEqual(
+      svc.registry.get('mcp:demo:' + n),
+      undefined,
+      `read-only tool "${n}" must NOT be registered as a generator`,
+    )
+  }
+  assert.deepStrictEqual(
+    svc.registry.list().filter((g) => g.kind === 'mcp').map((g) => g.id),
+    ['mcp:demo:generate'],
+    'only the generate tool becomes an MCP backend',
+  )
   assert.strictEqual(svc.defaultGeneratorId, 'mcp:demo:generate', 'MCP becomes default when no DeepSeek')
-  ok('enabling an MCP server spawns it, lists tools and registers adapters')
+  ok('enabling an MCP server spawns it, lists tools, registers only the generator tool')
 
   view = buildSettingsView(svc)
   assert.strictEqual(view.mcpServers[0].status.state, 'connected')
-  assert.ok(view.generatorCount >= 2, 'placeholder + mcp tool')
-  ok('settings view reports per-server status + tool count')
+  // 恰好 2 = 本地占位 + 1 个 MCP 生成器（3 个只读 tool 不计入）
+  assert.strictEqual(view.generatorCount, 2, 'placeholder + generate (read-only tools excluded)')
+  ok('settings view reports per-server status + tool count (read-only excluded)')
 
   // 真的能用这个 MCP 后端生成
   const project = ensureProject(svc)

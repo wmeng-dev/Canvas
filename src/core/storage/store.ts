@@ -6,7 +6,19 @@ export interface JsonStoreOptions {
   baseDir: string
 }
 
-const PROJECTS_DIR = 'projects'
+/** 项目文件的所在子目录名（相对 baseDir） */
+export const PROJECTS_DIR = 'projects'
+
+/**
+ * 项目 id 安全化：只允许 `[a-zA-Z0-9_-]`，其余字符一律换成 `_`，杜绝路径穿越。
+ *
+ * ⚠️ 这是**单一事实源**：写入方（JsonStore）与只读方（mcp-server/project-reader）
+ * 必须用同一个函数，否则两边对"同一 id 对应哪个文件"的理解会分叉。
+ * 真实项目 id 是 randomUUID（只含十六进制与连字符），消毒对它是恒等变换。
+ */
+export function sanitizeProjectId(id: string): string {
+  return String(id).replace(/[^a-zA-Z0-9_-]/g, '_')
+}
 
 /**
  * 低层 JSON 文件存储。
@@ -25,8 +37,7 @@ export class JsonStore {
   }
 
   private projectPath(id: string): string {
-    const safe = String(id).replace(/[^a-zA-Z0-9_-]/g, '_')
-    return path.join(this.projectsDir, `${safe}.json`)
+    return path.join(this.projectsDir, `${sanitizeProjectId(id)}.json`)
   }
 
   listProjectIds(): string[] {

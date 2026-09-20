@@ -17,8 +17,13 @@ export function createAppServices(): AppServices {
     process.env.DIVERGE_DATA_DIR || path.join(app.getPath('userData'), 'diverge')
   // 本地示例 MCP Server：编译产物就在 dist-electron/core/mcp-server/ 下。
   // 用 electron 自身的可执行文件当 Node 运行时 —— 子进程加 ELECTRON_RUN_AS_NODE=1 即退化为 Node，
-  // 这样打包后不必额外依赖系统 node。环境变量只写必要项（SDK 会自动合并安全默认值），
-  // 避免把整个 process.env（含其它密钥）落到 settings.json 里。
+  // 这样打包后不必额外依赖系统 node。
+  // ⚠️ DIVERGE_DATA_DIR 必须**显式注入**：MCP SDK 的 StdioClientTransport 只继承一份
+  // 安全白名单环境变量（Windows 上是 APPDATA/PATH/TEMP 等，见 client/stdio.js 的
+  // DEFAULT_INHERITED_ENV_VARS），它不在白名单里，不注入的话示例 Server 就找不到画布数据，
+  // 只读 tool（list_projects / get_tree / get_node）会报"找不到数据目录"。
+  // 环境变量仍只写必要项（SDK 会自动合并安全默认值），避免把整个 process.env（含其它密钥）
+  // 落到 settings.json 里 —— 这里新增的只是一个本地路径，不含敏感信息。
   const exampleScript = path.join(__dirname, '../core/mcp-server/workbuddy-mcp-server.js')
   return createServices({
     dataDir,
@@ -29,7 +34,11 @@ export function createAppServices(): AppServices {
       name: '本地示例 Server',
       command: process.execPath,
       args: [exampleScript],
-      env: { ELECTRON_RUN_AS_NODE: '1', DIVERGE_MCP_FAKE: '1' },
+      env: {
+        ELECTRON_RUN_AS_NODE: '1',
+        DIVERGE_MCP_FAKE: '1',
+        DIVERGE_DATA_DIR: dataDir,
+      },
     },
   })
 }

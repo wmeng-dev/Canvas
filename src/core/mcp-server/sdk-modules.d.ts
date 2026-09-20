@@ -67,7 +67,13 @@ declare module '@modelcontextprotocol/sdk/client/index.js' {
     )
     connect(transport: unknown): Promise<void>
     listTools(params?: unknown, options?: unknown): Promise<{
-      tools: Array<{ name: string; description?: string; inputSchema?: unknown }>
+      tools: Array<{
+        name: string
+        description?: string
+        inputSchema?: unknown
+        /** MCP 标准的行为标注；readOnlyHint=true 表示该 tool 只读、不产生副作用 */
+        annotations?: Record<string, unknown>
+      }>
     }>
     callTool(
       params: { name: string; arguments?: Record<string, unknown> },
