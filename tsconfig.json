@@ -22,7 +22,9 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "src"
+    "src/renderer",
+    "src/core",
+    "src/shared"
   ],
   "references": [
     {
