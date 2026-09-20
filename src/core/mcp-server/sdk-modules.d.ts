@@ -77,3 +77,17 @@ declare module '@modelcontextprotocol/sdk/client/index.js' {
     close(): Promise<void>
   }
 }
+
+declare module '@modelcontextprotocol/sdk/client/stdio.js' {
+  export interface StdioServerParameters {
+    command: string
+    args?: string[]
+    env?: Record<string, string>
+    cwd?: string
+    stderr?: 'pipe' | 'overlapped' | 'inherit' | 'ignore'
+  }
+  export function getDefaultEnvironment(): Record<string, string>
+  export class StdioClientTransport {
+    constructor(server: StdioServerParameters)
+  }
+}

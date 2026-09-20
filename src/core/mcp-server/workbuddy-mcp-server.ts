@@ -8,7 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { DeepSeekGenerator } from '../generator/direct/deepseek'
-import type { ContentType, Generator, NodeSpec } from '../generator/types'
+import type { ContentType, Generator, NodeContent, NodeSpec } from '../generator/types'
 
 const SERVER_NAME = 'workbuddy-diverge'
 const SERVER_VERSION = '0.1.0'
@@ -61,12 +61,35 @@ export function createMcpServer(generator: Generator): McpServer {
 }
 
 /**
+ * 按环境变量选择一个默认 generator：
+ * - DIVERGE_MCP_FAKE=1：返回确定性假生成器（用于子进程端到端测试，避免联网）。
+ * - 否则：DeepSeek 直连，key 取自 DEEPSEEK_API_KEY。
+ */
+function selectGeneratorFromEnv(): Generator {
+  if (process.env.DIVERGE_MCP_FAKE === '1') {
+    return {
+      id: 'fake',
+      label: 'Fake (env)',
+      kind: 'direct',
+      async generate(spec: NodeSpec): Promise<NodeContent> {
+        return {
+          contentType: spec.contentType ?? 'text',
+          text: 'FAKE:' + spec.prompt,
+          model: 'fake',
+          finishedAt: new Date().toISOString(),
+        }
+      },
+    }
+  }
+  return new DeepSeekGenerator({ apiKey: process.env.DEEPSEEK_API_KEY ?? '' })
+}
+
+/**
  * 以 stdio 传输启动独立 MCP Server 进程。
- * 未注入 generator 时，用环境变量 DEEPSEEK_API_KEY 构造 DeepSeek 直连后端。
+ * 未注入 generator 时，按环境变量选择默认后端（见 selectGeneratorFromEnv）。
  */
 export async function startStdioServer(generator?: Generator): Promise<void> {
-  const gen: Generator =
-    generator ?? new DeepSeekGenerator({ apiKey: process.env.DEEPSEEK_API_KEY ?? '' })
+  const gen: Generator = generator ?? selectGeneratorFromEnv()
   const server = createMcpServer(gen)
   const transport = new StdioServerTransport()
   await server.connect(transport)
