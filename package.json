@@ -1,0 +1,33 @@
+{
+  "name": "diverge-desktop",
+  "version": "0.1.0",
+  "description": "发散创意画布桌面应用 - AI 创意发散树，通过 MCP 对接任意 AI 工具",
+  "main": "dist-electron/main/main.js",
+  "author": "wmeng-dev",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"electron .\"",
+    "build": "tsc -p tsconfig.json && vite build && electron-builder",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@xyflow/react": "^12.3.0",
+    "zustand": "^4.5.0",
+    "better-sqlite3": "^11.3.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "react-markdown": "^9.0.1"
+  },
+  "devDependencies": {
+    "electron": "^31.6.0",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.4.8",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.5.4",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "concurrently": "^8.2.2"
+  }
+}
