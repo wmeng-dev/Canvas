@@ -8,7 +8,10 @@
   "scripts": {
     "dev": "npm run build:main && concurrently -k \"vite\" \"electron .\"",
     "build:main": "tsc -p tsconfig.main.json",
-    "build": "npm run build:main && tsc -p tsconfig.json --noEmit && vite build && electron-builder",
+    "build:renderer": "vite build",
+    "build": "npm run build:main && tsc -p tsconfig.json --noEmit && vite build && node scripts/dist.cjs",
+    "dist:dir": "npm run build:main && tsc -p tsconfig.json --noEmit && vite build && node scripts/dist.cjs --win --dir",
+    "icon": "node scripts/make-icon.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit"
   },
   "dependencies": {

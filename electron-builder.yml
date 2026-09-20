@@ -1,0 +1,60 @@
+# D.2 Windows 打包配置（electron-builder）
+#
+# 关键点：
+# - directories.output 必须避开 dist/ —— 渲染层的 vite 产物就输出在 dist/renderer，
+#   而 electron-builder 默认输出目录也叫 dist，两者会互相覆盖。
+# - files 用白名单，只装"运行时真正需要的东西"：主进程编译产物 + 渲染产物 + package.json
+#   （生产依赖由 electron-builder 自动从 node_modules 收集）。
+# - productName 含中文，为了让安装包文件名保持 ASCII，显式写 artifactName。
+# - npmRebuild: false —— 本项目是纯 JS 技术栈（无 .node 原生模块），不需要重建原生依赖；
+#   开着反而会执行 npm，而本机 npm install 不可用，没必要冒这个风险。
+#
+# 【国内网络】electron-builder 要从 GitHub Releases 下载 Electron zip / winCodeSign / nsis。
+# 直连 GitHub 常被墙（本机实测 github.com 返回 502）。用 `npm run build`（内部走
+# scripts/dist.cjs）会自动套 npmmirror 镜像，无需手工设环境变量。
+#
+# 【已知坑：winCodeSign 解压失败】
+# 症状：7za 报 "Cannot create symbolic link : 客户端没有所需的特权"，
+#      路径形如 ...\winCodeSign\<hash>\darwin\10.12\lib\libcrypto.dylib。
+# 原因：winCodeSign 包里含 macOS 符号链接，而 Windows 创建符号链接需要特权
+#      （开发者模式 或 管理员）。electron-builder 需要它来给 exe 打图标/版本信息。
+# 解法（任一）：
+#   1) 开启「设置 → 隐私和安全性 → 开发者选项 → 开发人员模式」（推荐，一次设置永久生效）
+#   2) 以管理员身份运行打包命令
+#   3) 临时绕过（代价：exe 不带自定义图标/版本信息）：
+#      node scripts/dist.cjs --win --dir -c.win.signAndEditExecutable=false
+
+appId: cn.wmeng.diverge
+productName: 发散创意画布
+copyright: Copyright © 2026 wmeng-dev
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist-electron/**/*
+  - dist/renderer/**/*
+  - package.json
+  - "!**/*.map"
+
+# 纯 JS，无原生模块 → 不需要 rebuild
+npmRebuild: false
+asar: true
+# 应用图标（Windows 需要 >= 256x256）
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  artifactName: Diverge-${version}-win-${arch}-setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 发散创意画布
+  artifactName: Diverge-${version}-win-${arch}-setup.${ext}

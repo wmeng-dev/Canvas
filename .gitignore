@@ -4,6 +4,8 @@ node_modules/
 dist/
 dist-electron/
 dist-test/
+# electron-builder output (installer / unpacked app)
+release/
 # WorkBuddy project data (personal config, do NOT commit)
 .workbuddy/
 # Local data / secrets
@@ -19,6 +21,7 @@ userData/
 # Local verification artifacts (electron screenshots / probes)
 /canvas-screenshot.png
 /export-html-screenshot.png
+/ui-*.png
 probe-*.cjs
 # OS
 Thumbs.db
