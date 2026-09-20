@@ -23,6 +23,62 @@ body {
   color: #0d1117;
 }
 
+/* D.6 画布缩放控件（放大 / 缩小 / fitView / 锁定）在深色主题下的可读性。
+   xyflow 默认按钮底色是近白的 #fefefe，而图标是 fill:currentColor + color:inherit，
+   于是继承了 body 的浅色 #e6edf3 —— 浅图标压浅底，实测对比度只有 ~1.1:1，
+   四个按钮肉眼几乎"隐形"（WCAG 非文本内容要求 ≥3:1）。
+   修法：覆盖 xyflow 的**非 default 变量名** --xy-controls-button-*。
+   它内部写的是 var(该名, var(同名-default))，所以填了非 default 名就一定生效，
+   与 CSS 加载顺序无关（styles.css 先于 App 引入的 xyflow style.css），也不必用 !important。 */
+.react-flow {
+  --xy-controls-button-background-color: #161b22;
+  --xy-controls-button-background-color-hover: #1f6feb;
+  --xy-controls-button-color: #e6edf3;
+  --xy-controls-button-color-hover: #ffffff;
+  --xy-controls-button-border-color: #30363d;
+  /* 1px 描边 + 投影，让控件从画布底色上"浮"出来（默认投影在黑底上等于看不见） */
+  --xy-controls-box-shadow: 0 0 0 1px #30363d, 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+/* 尺寸是 xyflow 里写死的（26px / 图标 12px），变量管不到，用更高特异性覆盖：
+   .react-flow + .react-flow__controls-button = (0,2,0)，赢过自带规则的 (0,1,0)。 */
+.react-flow .react-flow__controls {
+  border-radius: 6px;
+  overflow: hidden;
+}
+.react-flow .react-flow__controls-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.react-flow .react-flow__controls-button svg {
+  max-width: 15px;
+  max-height: 15px;
+}
+/* 禁用态（例如已到最大缩放）默认 fill-opacity .4，在深底上偏糊，抬到 .55 仍可辨 */
+.react-flow .react-flow__controls-button:disabled svg {
+  fill-opacity: 0.55;
+}
+.react-flow .react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+/* 缩略图（快速定位）同样是"默认浅色主题"：底色 #fff + 遮罩 rgba(240,240,240,.6)，
+   在白底应用里没问题，压在我们 #0d1117 的画布上就是一块刺眼的白板。
+   注意用 box-shadow 画描边、不用 border —— 围边会影响元素尺寸，而缩略图的点击定位
+   是按 svg 的 getBoundingClientRect 比例换算的，不引入任何布局位移最安全。 */
+.react-flow {
+  --xy-minimap-background-color: #161b22;
+  --xy-minimap-mask-background-color: rgba(1, 4, 9, 0.55);
+  --xy-minimap-mask-stroke-color: #8b949e;
+}
+.react-flow .react-flow__minimap {
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px #30363d, 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
 /* C.4 Markdown 预览排版（react-markdown 输出裸元素，需补基础样式） */
 .md-body {
   font-size: 13px;
