@@ -9,6 +9,7 @@ export const IPC = {
   ensureProject: 'diverge:ensureProject',
   generateNode: 'diverge:generateNode',
   regenerateNode: 'diverge:regenerateNode',
+  updateNodePrompt: 'diverge:updateNodePrompt',
   setNodeVersion: 'diverge:setNodeVersion',
   getAiSettings: 'diverge:getAiSettings',
   setDeepSeekKey: 'diverge:setDeepSeekKey',
@@ -59,10 +60,20 @@ export interface GenerateChildrenResponse {
 export interface RegenerateNodeRequest {
   projectId: string
   nodeId: string
-  /** 不传则沿用节点原 prompt */
+  /** 编辑后的描述；不传则沿用节点原描述 */
   prompt?: string
   contentType?: ContentType
   generatorId?: string
+}
+
+/**
+ * "编辑描述但不生成"：只更新描述，不追加版本、不动内容。
+ * 描述属于当前版本 → 之后翻案回旧版本时会一起回退。
+ */
+export interface UpdateNodePromptRequest {
+  projectId: string
+  nodeId: string
+  prompt: string
 }
 
 export interface SetNodeVersionRequest {
@@ -107,6 +118,8 @@ export interface DivergeApi {
   ensureProject(): Promise<ProjectFile>
   generateNode(req: GenerateNodeRequest): Promise<GenerateChildrenResponse>
   regenerateNode(req: RegenerateNodeRequest): Promise<TreeNode>
+  /** 只保存描述（不生成）；返回更新后的节点 */
+  updateNodePrompt(req: UpdateNodePromptRequest): Promise<TreeNode>
   setNodeVersion(req: SetNodeVersionRequest): Promise<TreeNode>
 
   // --- C.6 AI 后端设置 ---

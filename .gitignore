@@ -18,6 +18,8 @@ userData/
 # Logs / temp probes
 *.log
 .a*.log
+# 回归/类型检查的日志落盘（Windows 上 stdout 常丢，只能写文件再读）
+*.out.txt
 # Local verification artifacts (electron screenshots / probes)
 /canvas-screenshot.png
 /export-html-screenshot.png

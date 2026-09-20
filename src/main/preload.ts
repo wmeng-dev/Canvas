@@ -10,6 +10,7 @@ import type {
   RegenerateNodeRequest,
   SaveExportRequest,
   SetNodeVersionRequest,
+  UpdateNodePromptRequest,
 } from '../shared/ipc'
 
 const api: DivergeApi = {
@@ -17,6 +18,8 @@ const api: DivergeApi = {
   ensureProject: () => ipcRenderer.invoke(IPC.ensureProject),
   generateNode: (req: GenerateNodeRequest) => ipcRenderer.invoke(IPC.generateNode, req),
   regenerateNode: (req: RegenerateNodeRequest) => ipcRenderer.invoke(IPC.regenerateNode, req),
+  updateNodePrompt: (req: UpdateNodePromptRequest) =>
+    ipcRenderer.invoke(IPC.updateNodePrompt, req),
   setNodeVersion: (req: SetNodeVersionRequest) => ipcRenderer.invoke(IPC.setNodeVersion, req),
 
   getAiSettings: () => ipcRenderer.invoke(IPC.getAiSettings),

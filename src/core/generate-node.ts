@@ -111,8 +111,10 @@ export async function generateNode(
 
 /**
  * 重新生成：为**已存在**节点再产出一版内容，追加为新版本。
- * 旧版本保留 → 可翻案回退。标题与评估跟随"这一版"一起换（翻案时整版还原），
- * 所以节点显示名会随之更新；拿不到新标题则沿用原名。
+ * 旧版本保留 → 可翻案回退。描述 / 标题 / 评估跟随"这一版"一起换（翻案时整版还原），
+ * 所以节点显示名与描述都会随之更新；拿不到新标题则沿用原名。
+ *
+ * `req.prompt` 是用户在"编辑描述"里改过的描述；不传则沿用节点上的描述。
  */
 export async function regenerateNode(
   svc: AppServices,
@@ -123,7 +125,12 @@ export async function regenerateNode(
   const node = file.tree.nodes.find((n) => n.id === req.nodeId)
   if (!node) throw new Error(`node not found: ${req.nodeId}`)
 
-  const prompt = (req.prompt ?? node.prompt ?? node.label).trim()
+  // 描述来源优先级：
+  // - 用户显式传了描述（编辑后点"重新生成"）→ 就用它；被清空则**拒绝生成**（不能拿结果标题顶替）
+  // - 没传 → 用节点上的描述；仍为空（如从没填过描述的节点）才回落到显示名，与既有行为一致
+  const edited = req.prompt !== undefined ? req.prompt.trim() : null
+  const prompt = edited ?? (node.prompt.trim() || node.label.trim())
+  if (!prompt) throw new Error('描述不能为空：请先填写要发散的内容')
   const parent = node.parentId ? file.tree.nodes.find((n) => n.id === node.parentId) : undefined
   const parentContext = parent ? parent.content || parent.prompt || parent.label : undefined
 
@@ -138,6 +145,9 @@ export async function regenerateNode(
   return svc.repo.addVersion(req.projectId, node.id, {
     content: content.text,
     contentType: content.contentType,
+    // 记下"这一版是用哪句话生成的"，这样编辑过描述再生成时，
+    // 描述与内容属于同一版，翻案能一起回退（不会出现"内容 v1、描述 v2"）
+    prompt,
     title: content.title,
     analysis: content.analysis ?? null,
     generatorId: generator.id,

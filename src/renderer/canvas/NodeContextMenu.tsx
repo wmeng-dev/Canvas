@@ -1,4 +1,6 @@
 // C.5 节点右键菜单：发散子节点 / 重新生成（追加新版本）。
+// D.9：「重新生成」不再是"一键直出"，而是和面板按钮一样**先进编辑态**（描述 → 输入框），
+//      编辑后可选择重新生成或只保存。两个入口共用 store 里的 editingPromptNodeId。
 // 位置用 fixed + 视口坐标，并做右/下边界收敛，避免菜单跑出窗口。
 
 import { useEffect } from 'react'
@@ -12,7 +14,7 @@ export function NodeContextMenu() {
   const nodes = useTreeStore((s) => s.nodes)
   const closeMenu = useTreeStore((s) => s.closeMenu)
   const openDialog = useTreeStore((s) => s.openDialog)
-  const regenerate = useTreeStore((s) => s.regenerate)
+  const beginEditPrompt = useTreeStore((s) => s.beginEditPrompt)
   const selectNode = useTreeStore((s) => s.selectNode)
   const regeneratingId = useTreeStore((s) => s.regeneratingId)
 
@@ -37,8 +39,8 @@ export function NodeContextMenu() {
   const regenerateLabel = busy
     ? '重新生成中…'
     : versionCount === 0
-      ? '生成内容（首版）'
-      : `重新生成（新版本 v${versionCount + 1}）`
+      ? '编辑描述并生成…'
+      : `编辑描述并重新生成（新版本 v${versionCount + 1}）`
 
   const itemStyle: React.CSSProperties = {
     display: 'block',
@@ -110,7 +112,10 @@ export function NodeContextMenu() {
         <button
           data-testid="menu-regenerate"
           disabled={busy}
-          onClick={() => void regenerate(node.id)}
+          onClick={() => {
+            // 进编辑态（beginEditPrompt 内部会选中节点并关菜单）
+            beginEditPrompt(node.id)
+          }}
           style={{ ...itemStyle, color: busy ? '#7d8590' : '#e6edf3', cursor: busy ? 'wait' : 'pointer' }}
         >
           {regenerateLabel}

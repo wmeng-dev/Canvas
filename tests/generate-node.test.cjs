@@ -263,6 +263,120 @@ ok('ensureProject is idempotent')
   assert.ok(threw)
   ok('unknown generatorId rejects')
 
+  // ============================================================
+  // D.9 编辑描述：重新生成可带（编辑过的）描述；也可只保存不生成
+  // ============================================================
+
+  // 20. 首次生成时，描述随首版一起落库（描述是"这一版"的属性）
+  const d9 = await generateNode(svc, { projectId, parentNodeId: rootId, prompt: 'D9 原始描述' })
+  const d9node = d9.items[0].node
+  assert.strictEqual(d9node.prompt, 'D9 原始描述')
+  assert.strictEqual(d9node.versions[0].prompt, 'D9 原始描述', '首版记录生成它的那句话')
+  ok('D.9: first version records its prompt')
+
+  // 21. 编辑描述后重新生成 → 新版本带编辑后的描述，节点描述同步，内容基于新描述
+  const d9v1Content = d9node.content
+  const edited = await regenerateNode(svc, { projectId, nodeId: d9node.id, prompt: 'D9 编辑后的描述' })
+  assert.strictEqual(edited.versions.length, 2)
+  assert.strictEqual(edited.prompt, 'D9 编辑后的描述', '节点描述同步成编辑后的值')
+  assert.strictEqual(edited.versions[1].prompt, 'D9 编辑后的描述', '新版本记录编辑后的描述')
+  assert.ok(edited.content.includes('D9 编辑后的描述'), '内容确实是拿新描述生成的')
+  assert.strictEqual(edited.versions[0].prompt, 'D9 原始描述', '旧版本的描述原样保留')
+  assert.notStrictEqual(edited.content, d9v1Content)
+  ok('D.9: regenerate with edited prompt -> new version carries it (old kept)')
+
+  // 22. 描述为空 → 拒绝生成（不能拿结果标题顶替），且不追加版本
+  let emptyRejected = false
+  try {
+    await regenerateNode(svc, { projectId, nodeId: d9node.id, prompt: '   ' })
+  } catch (e) {
+    emptyRejected = /描述不能为空/.test(e.message)
+  }
+  assert.ok(emptyRejected, '编辑成空描述后再生成应被拒绝')
+  assert.strictEqual(
+    svc.repo.get(projectId).tree.nodes.find((n) => n.id === d9node.id).versions.length,
+    2,
+    '被拒绝时不追加版本',
+  )
+  ok('D.9: empty edited prompt rejects (no version appended)')
+
+  // 23. updateNodePrompt：只改描述、不生成、不加版本、内容不变
+  const beforeSave = svc.repo.get(projectId).tree.nodes.find((n) => n.id === d9node.id)
+  const beforeContent = beforeSave.content
+  const saved = svc.repo.updateNodePrompt(projectId, d9node.id, 'D9 手动保存的描述')
+  assert.strictEqual(saved.prompt, 'D9 手动保存的描述')
+  assert.strictEqual(saved.versions.length, 2, '保存描述不追加版本')
+  assert.strictEqual(saved.content, beforeContent, '内容不变（确实没生成）')
+  assert.strictEqual(saved.contentType, beforeSave.contentType)
+  assert.strictEqual(saved.versions[1].prompt, 'D9 手动保存的描述', '改写的是当前版本的描述')
+  assert.strictEqual(saved.versions[0].prompt, 'D9 原始描述', '旧版本不受影响')
+  ok('D.9: updateNodePrompt saves description only (no new version, content untouched)')
+
+  // 24. 翻案回旧版本 → 描述跟着一起回退（不会出现"内容 v1、描述 v2"错位）
+  const back = svc.repo.setCurrentVersion(projectId, d9node.id, saved.versions[0].id)
+  assert.strictEqual(back.content, saved.versions[0].content)
+  assert.strictEqual(back.prompt, 'D9 原始描述', '描述随版本回退')
+  ok('D.9: revert restores the description along with the content')
+
+  // 25. 未传描述时：沿用节点上的描述；节点无描述才回落显示名（既有行为）
+  const orphan = svc.repo.addNode(projectId, { label: '无描述节点', parentId: rootId, status: 'empty' })
+  assert.strictEqual(orphan.prompt, '')
+  assert.strictEqual(orphan.versions.length, 0)
+  const fallback = await regenerateNode(svc, { projectId, nodeId: orphan.id })
+  assert.strictEqual(fallback.versions.length, 1)
+  assert.strictEqual(fallback.prompt, '无描述节点', '节点无描述时回落显示名')
+  ok('D.9: no prompt passed -> node prompt, else fallback to label')
+
+  // 26. 空节点（从没生成过、也没有当前版本）也能只保存描述
+  const orphanSaved = svc.repo.updateNodePrompt(projectId, orphan.id, '孤儿节点描述')
+  assert.strictEqual(orphanSaved.prompt, '孤儿节点描述')
+  assert.strictEqual(orphanSaved.versions.length, 1, '已有版本时不追加；只改动当前版本的描述')
+  assert.strictEqual(orphanSaved.versions[0].prompt, '孤儿节点描述')
+  const noVer = svc.repo.addNode(projectId, { label: '零版本节点', parentId: null, status: 'empty' })
+  const noVerSaved = svc.repo.updateNodePrompt(projectId, noVer.id, '零版本描述')
+  assert.strictEqual(noVerSaved.prompt, '零版本描述')
+  assert.strictEqual(noVerSaved.versions.length, 0, '零版本节点保存描述不会凭空造版本')
+  ok('D.9: updateNodePrompt works for versionless nodes too')
+
+  // 27. 旧数据兼容：版本没有 prompt 时，翻案保留节点上的描述（不清空）
+  const { JsonStore } = require('../dist-test/core/storage/store')
+  const { ProjectRepository } = require('../dist-test/core/storage/repositories')
+  const legacyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-legacy-'))
+  const legacyStore = new JsonStore({ baseDir: legacyDir })
+  const legacyId = 'legacy-proj'
+  const legacyTs = new Date().toISOString()
+  legacyStore.write(legacyId, {
+    project: { id: legacyId, name: '旧项目', createdAt: legacyTs, updatedAt: legacyTs },
+    tree: {
+      nodes: [
+        {
+          id: 'legacy-node',
+          parentId: null,
+          label: '旧标题',
+          prompt: '节点级描述',
+          content: 'B',
+          contentType: 'markdown',
+          status: 'done',
+          generatorId: 'fake',
+          // 早期版本文件里的版本没有 prompt 字段
+          versions: [
+            { id: 'lv1', content: 'A', contentType: 'markdown', generatorId: 'fake', createdAt: legacyTs },
+            { id: 'lv2', content: 'B', contentType: 'markdown', generatorId: 'fake', createdAt: legacyTs },
+          ],
+          currentVersionId: 'lv2',
+          createdAt: legacyTs,
+          updatedAt: legacyTs,
+        },
+      ],
+      edges: [],
+    },
+  })
+  const legacyRepo = new ProjectRepository(legacyStore)
+  const legacyBack = legacyRepo.setCurrentVersion(legacyId, 'legacy-node', 'lv1')
+  assert.strictEqual(legacyBack.content, 'A', '旧数据也能正常翻案')
+  assert.strictEqual(legacyBack.prompt, '节点级描述', '旧版本没有 prompt 时保留节点上的描述（不清空）')
+  ok('D.9: legacy versions without prompt keep the node-level description on revert')
+
   console.log(`\nALL GENERATE-NODE TESTS PASSED (${passed} checks)`)
 })().catch((e) => {
   console.error('\nTEST FAILED:', e)

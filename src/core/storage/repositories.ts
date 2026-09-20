@@ -28,6 +28,11 @@ export type NewNodeInput = Partial<TreeNode> & {
 export interface NewVersionInput {
   content: string
   contentType?: TreeNode['contentType']
+  /**
+   * 这一版是用哪句话生成的（可能是用户编辑后的描述）。
+   * 给了就写进版本并同步成节点上的描述 —— 与 title/analysis 同一套"跟随版本"规则。
+   */
+  prompt?: string
   /** 这一版的结果标题；给了就同步成节点显示名 */
   title?: string
   /** 这一版的结构化评估 */
@@ -48,6 +53,8 @@ function migrateNode(n: TreeNode): void {
       id: `${n.id}-v1`,
       content: n.content,
       contentType: n.contentType,
+      // 描述也带上：否则旧项目翻案回 v1 时会因为"版本没有 prompt"而保留后来改过的描述
+      prompt: n.prompt || undefined,
       generatorId: n.generatorId,
       createdAt: n.createdAt,
     })
@@ -132,6 +139,7 @@ export class ProjectRepository {
         id: randomUUID(),
         content: node.content,
         contentType: node.contentType,
+        prompt: node.prompt,
         title: input.title,
         analysis: input.analysis ?? null,
         generatorId: node.generatorId,
@@ -170,7 +178,7 @@ export class ProjectRepository {
   /**
    * 追加一个内容版本并设为当前（"重新生成"用）。
    * 旧版本一律保留 —— 这是"可翻案"的前提。
-   * 新版本带标题时会同步更新节点显示名（标题属于"这一版"，翻案可整版还原）。
+   * 描述 / 标题 / 评估都属于"这一版"，会一并同步到节点，翻案时可整版还原。
    */
   addVersion(projectId: string, nodeId: string, input: NewVersionInput): TreeNode {
     const file = this.get(projectId)
@@ -181,6 +189,7 @@ export class ProjectRepository {
       id: randomUUID(),
       content: input.content,
       contentType: input.contentType ?? node.contentType,
+      prompt: input.prompt ?? node.prompt,
       title: input.title,
       analysis: input.analysis ?? null,
       generatorId: input.generatorId ?? node.generatorId,
@@ -192,6 +201,8 @@ export class ProjectRepository {
     node.content = version.content
     node.contentType = version.contentType
     node.analysis = version.analysis ?? null
+    // 描述跟随这一版（编辑过描述再重新生成时，这里把新描述落到节点上）
+    if (version.prompt !== undefined) node.prompt = version.prompt
     // 拿不到标题就沿用原显示名 —— 宁可保留已知名字，也不要退化成 prompt 派生标签
     const nextTitle = version.title?.trim()
     if (nextTitle) node.label = nextTitle
@@ -204,8 +215,29 @@ export class ProjectRepository {
   }
 
   /**
+   * "编辑描述但不生成"：只把当前版本的描述改成新值，**不追加版本、不动内容**。
+   * 描述与 title/analysis 一样属于版本 → 之后翻案回旧版本时，描述会一起回退。
+   * 节点还没有任何版本（空节点的描述编辑）时只改节点上的描述。
+   */
+  updateNodePrompt(projectId: string, nodeId: string, prompt: string): TreeNode {
+    const file = this.get(projectId)
+    const node = file.tree.nodes.find((n) => n.id === nodeId)
+    if (!node) throw new Error(`Node not found: ${nodeId}`)
+    const ts = nowIso()
+    if (node.currentVersionId) {
+      const current = node.versions.find((v) => v.id === node.currentVersionId)
+      if (current) current.prompt = prompt
+    }
+    node.prompt = prompt
+    node.updatedAt = ts
+    file.project.updatedAt = ts
+    this.store.write(projectId, file)
+    return node
+  }
+
+  /**
    * 翻案：把当前版本指回某个历史版本（不删除、不覆盖任何版本）。
-   * 标题与评估同属版本内容，一并还原，否则会出现"正文回到 v1、标题还停在 v2"的错位。
+   * 描述 / 标题 / 评估同属版本内容，一并还原，否则会出现"正文回到 v1、描述还停在 v2"的错位。
    */
   setCurrentVersion(projectId: string, nodeId: string, versionId: string): TreeNode {
     const file = this.get(projectId)
@@ -217,6 +249,8 @@ export class ProjectRepository {
     node.content = version.content
     node.contentType = version.contentType
     node.analysis = version.analysis ?? null
+    // 旧数据的版本可能没有 prompt → 那就保留节点上的描述，不要清空
+    if (version.prompt !== undefined) node.prompt = version.prompt
     const title = version.title?.trim()
     if (title) node.label = title
     node.generatorId = version.generatorId

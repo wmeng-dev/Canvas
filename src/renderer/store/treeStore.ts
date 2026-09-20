@@ -92,6 +92,12 @@ interface TreeState {
   menu: ContextMenuState | null
   /** 正在重新生成的节点 id */
   regeneratingId: string | null
+  /**
+   * 正在"编辑描述"的节点 id（null = 不在编辑态）。
+   * 放在 store 而不是面板局部 state，是因为右键菜单的「重新生成」也要能进入编辑态 ——
+   * 两处入口必须共用同一个状态，否则会出现"菜单进了编辑态、面板却不知道"。
+   */
+  editingPromptNodeId: string | null
 
   /** C.6 AI 后端设置面板 */
   aiOpen: boolean
@@ -120,7 +126,17 @@ interface TreeState {
   closeMenu: () => void
 
   generate: (prompt: string, generatorId?: string, contentType?: ContentType, count?: number) => Promise<void>
-  regenerate: (nodeId: string) => Promise<void>
+  /**
+   * 用（可能编辑过的）描述重新生成一版。不传描述则沿用节点原描述。
+   * 成功后退出编辑态。
+   */
+  regenerate: (nodeId: string, prompt?: string) => Promise<void>
+  /** 进入"编辑描述"态（并选中该节点）；不会触发生成 */
+  beginEditPrompt: (nodeId: string) => void
+  /** 取消编辑：丢弃改动，回到只读展示 */
+  cancelEditPrompt: () => void
+  /** 只保存描述、不生成（"不生成"那条路） */
+  savePrompt: (nodeId: string, prompt: string) => Promise<void>
   setVersion: (nodeId: string, versionId: string) => Promise<void>
 
   // --- C.6 AI 后端设置 ---
@@ -240,6 +256,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   warning: null,
   menu: null,
   regeneratingId: null,
+  editingPromptNodeId: null,
   aiOpen: false,
   aiSettings: null,
   aiBusy: false,
@@ -272,7 +289,9 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) }),
   onEdgesChange: (changes) => set({ edges: applyEdgeChanges(changes, get().edges) }),
   onConnect: (conn) => set({ edges: addEdge({ ...conn, animated: true }, get().edges) }),
-  selectNode: (id) => set({ selectedNodeId: id }),
+  selectNode: (id) =>
+    // 切到别的节点时退出编辑态：不能把 A 节点未保存的描述带到 B 节点上
+    set((s) => ({ selectedNodeId: id, editingPromptNodeId: s.editingPromptNodeId === id ? s.editingPromptNodeId : null })),
 
   openDialog: (parentId) => set({ dialogOpen: true, dialogParentId: parentId, error: null }),
   closeDialog: () => set({ dialogOpen: false, error: null }),
@@ -373,7 +392,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     }
   },
 
-  regenerate: async (nodeId) => {
+  regenerate: async (nodeId, prompt) => {
     const { projectId } = get()
     const api = window.diverge
     if (!api || !projectId) {
@@ -382,14 +401,42 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     }
     set({ regeneratingId: nodeId, error: null, menu: null })
     try {
-      const updated = await api.regenerateNode({ projectId, nodeId })
+      const updated = await api.regenerateNode({ projectId, nodeId, prompt })
       set((s) => ({
         nodes: mergeNode(s.nodes, updated),
         regeneratingId: null,
         selectedNodeId: nodeId,
+        // 生成成功 → 退出编辑态（描述已随这一版落库）
+        editingPromptNodeId: s.editingPromptNodeId === nodeId ? null : s.editingPromptNodeId,
       }))
     } catch (e) {
+      // 失败时**保留编辑态**：用户刚敲好的描述不能因为一次失败就丢掉
       set({ regeneratingId: null, error: `重新生成失败：${(e as Error).message}` })
+    }
+  },
+
+  beginEditPrompt: (nodeId) =>
+    set({ selectedNodeId: nodeId, editingPromptNodeId: nodeId, menu: null, error: null }),
+
+  cancelEditPrompt: () => set({ editingPromptNodeId: null }),
+
+  savePrompt: async (nodeId, prompt) => {
+    const { projectId } = get()
+    const api = window.diverge
+    if (!api || !projectId) {
+      set({ error: '需要主进程支持才能保存描述。' })
+      return
+    }
+    try {
+      const updated = await api.updateNodePrompt({ projectId, nodeId, prompt: prompt.trim() })
+      set((s) => ({
+        nodes: mergeNode(s.nodes, updated),
+        selectedNodeId: nodeId,
+        editingPromptNodeId: s.editingPromptNodeId === nodeId ? null : s.editingPromptNodeId,
+        error: null,
+      }))
+    } catch (e) {
+      set({ error: `保存描述失败：${(e as Error).message}` })
     }
   },
 

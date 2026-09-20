@@ -10,6 +10,7 @@ import type {
   RegenerateNodeRequest,
   SaveExportRequest,
   SetNodeVersionRequest,
+  UpdateNodePromptRequest,
 } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
 import { ensureProject } from '../../core/services'
@@ -35,6 +36,11 @@ export function registerIpcHandlers(svc: AppServices): void {
 
   ipcMain.handle(IPC.regenerateNode, (_evt, req: RegenerateNodeRequest) =>
     regenerateNode(svc, req),
+  )
+
+  // "编辑描述但不生成"：只改描述，不追加版本、不动内容
+  ipcMain.handle(IPC.updateNodePrompt, (_evt, req: UpdateNodePromptRequest) =>
+    svc.repo.updateNodePrompt(req.projectId, req.nodeId, String(req.prompt ?? '').trim()),
   )
 
   ipcMain.handle(IPC.setNodeVersion, (_evt, req: SetNodeVersionRequest) =>

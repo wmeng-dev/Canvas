@@ -35,6 +35,13 @@ export interface NodeVersion {
   content: string
   contentType: ContentType
   /**
+   * 这一版是用**哪句话**生成的（用户当初输入、或后来编辑过的描述）。
+   * 与 title/analysis 同一套规则：挂在版本上，翻案时整版一起回退，
+   * 因此不会出现"内容是 v1、描述是 v2"的错位。
+   * 旧项目文件里可能没有这个字段（那时描述只在节点级）。
+   */
+  prompt?: string
+  /**
    * 这一版的"结果标题"——即发散出来的东西叫什么，而不是当初输入的那句话。
    * 节点显示名跟随当前版本的 title；生成器没给（如第三方 MCP 后端）时回落到 prompt 派生标签。
    */
@@ -55,6 +62,10 @@ export interface TreeNode {
    * 注意：它**不是**用户输入的那句话 —— 原始输入在 `prompt` 里。
    */
   label: string
+  /**
+   * 当前版本的**描述**：用户当初输入、或之后在"编辑描述"里改过的那句话。
+   * 与 label / analysis 一样是**当前版本的镜像**（翻案时一起回退）。
+   */
   prompt: string
   /** 当前生效的内容（始终等于 currentVersion 的快照，便于读取方不必走版本表） */
   content: string

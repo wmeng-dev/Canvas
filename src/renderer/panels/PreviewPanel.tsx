@@ -1,8 +1,11 @@
-// C.2/C.4/C.5/D.3 预览面板：选中节点 → 按 contentType 预览 + 版本历史（可翻案）+ 重新生成。
+// C.2/C.4/C.5/D.3 预览面板：选中节点 → 按 contentType 预览 + 版本历史（可翻案）+ 编辑描述/重新生成。
 // 类型分发见 previews/ContentPreview.tsx。
 // D.3：面板宽度可拖左边缘调整（不再固定 340），双击把手复位。
+// 编辑描述：点「重新生成」**不再直接生成**，而是就地进入编辑态（描述 → 输入框），
+//          编辑后可选择「重新生成」或「保存（不生成）」，也可「取消」。
+//          编辑态的"谁在编辑"存在 store 里（右键菜单同一个入口），此处只渲染。
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTreeStore, PREVIEW_WIDTH_MAX, PREVIEW_WIDTH_MIN } from '../store/treeStore'
 import { AnalysisBlock } from './AnalysisBlock'
 import { ContentPreview } from '../previews/ContentPreview'
@@ -29,12 +32,25 @@ export function PreviewPanel() {
   )
   const openDialog = useTreeStore((s) => s.openDialog)
   const regenerate = useTreeStore((s) => s.regenerate)
+  const beginEditPrompt = useTreeStore((s) => s.beginEditPrompt)
+  const cancelEditPrompt = useTreeStore((s) => s.cancelEditPrompt)
+  const savePrompt = useTreeStore((s) => s.savePrompt)
+  const editingPromptNodeId = useTreeStore((s) => s.editingPromptNodeId)
   const setVersion = useTreeStore((s) => s.setVersion)
   const regeneratingId = useTreeStore((s) => s.regeneratingId)
   const width = useTreeStore((s) => s.previewWidth)
   const setPreviewWidth = useTreeStore((s) => s.setPreviewWidth)
   const resetPreviewWidth = useTreeStore((s) => s.resetPreviewWidth)
   const [dragging, setDragging] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  const editing = !!node && editingPromptNodeId === node.id
+
+  // 进入编辑态（或换节点）时，把当前描述灌进草稿；退出编辑态时清空，
+  // 免得下次进来先闪一下上次的残留文字。
+  useEffect(() => {
+    setDraft(editing ? (node?.data.prompt ?? '') : '')
+  }, [editing, node?.id])
 
   /** 拖左边缘改宽：面板贴右边，指针左移 → 变大。 */
   const onResizeStart = (e: React.MouseEvent) => {
@@ -155,24 +171,27 @@ export function PreviewPanel() {
             <button data-testid="branch-from-node" onClick={() => openDialog(node.id)} style={btn}>
               从这里发散
             </button>
-            <button
-              data-testid="regenerate-node"
-              disabled={busy}
-              onClick={() => void regenerate(node.id)}
-              style={{ ...btn, color: busy ? '#7d8590' : '#58a6ff', cursor: busy ? 'wait' : 'pointer' }}
-            >
-              {busy ? '重新生成中…' : '重新生成'}
-            </button>
+            {/* 入口：进入"编辑描述"，**不触发生成**（生成/不生成在编辑态里再选） */}
+            {!editing && (
+              <button
+                data-testid="regenerate-node"
+                onClick={() => beginEditPrompt(node.id)}
+                style={btn}
+              >
+                重新生成
+              </button>
+            )}
           </div>
 
-          {/* 原始描述：不再作为节点标题，但保留为次要信息（标签页里悬停也能看到） */}
-          {node.data.prompt && (
+          {/* 描述区：只读展示原始描述；编辑态下变成输入框 + 「重新生成 / 保存（不生成）/ 取消」 */}
+          {(editing || node.data.prompt) && (
             <div
               data-testid="preview-prompt"
+              data-editing={editing ? '1' : '0'}
               style={{
                 marginBottom: 12,
                 padding: '7px 10px',
-                borderLeft: '3px solid #30363d',
+                borderLeft: `3px solid ${editing ? '#1f6feb' : '#30363d'}`,
                 background: '#161b22',
                 borderRadius: '0 6px 6px 0',
                 fontSize: 12,
@@ -181,8 +200,72 @@ export function PreviewPanel() {
                 wordBreak: 'break-word',
               }}
             >
-              <span style={{ color: '#6e7681' }}>原始描述：</span>
-              {node.data.prompt}
+              <span style={{ color: '#6e7681' }}>{editing ? '编辑描述：' : '原始描述：'}</span>
+              {!editing && node.data.prompt}
+
+              {editing && (
+                <>
+                  <textarea
+                    data-testid="prompt-editor"
+                    autoFocus
+                    value={draft}
+                    disabled={busy}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') cancelEditPrompt()
+                    }}
+                    placeholder="这段描述决定接下来怎么发散（留空则无法重新生成）"
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      marginTop: 6,
+                      minHeight: 68,
+                      resize: 'vertical',
+                      background: '#0d1117',
+                      color: '#e6edf3',
+                      border: '1px solid #30363d',
+                      borderRadius: 6,
+                      padding: '6px 8px',
+                      fontSize: 12,
+                      lineHeight: 1.6,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button
+                      data-testid="confirm-regenerate"
+                      disabled={busy || !draft.trim()}
+                      title={draft.trim() ? undefined : '描述不能为空'}
+                      onClick={() => void regenerate(node.id, draft)}
+                      style={{
+                        ...btn,
+                        color: busy || !draft.trim() ? '#7d8590' : '#58a6ff',
+                        cursor: busy ? 'wait' : draft.trim() ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      {busy ? '重新生成中…' : '重新生成'}
+                    </button>
+                    <button
+                      data-testid="save-prompt"
+                      disabled={busy}
+                      title="只保存描述，不重新生成"
+                      onClick={() => void savePrompt(node.id, draft)}
+                      style={{ ...btn, color: busy ? '#7d8590' : '#e6edf3' }}
+                    >
+                      保存（不生成）
+                    </button>
+                    <button
+                      data-testid="cancel-edit"
+                      disabled={busy}
+                      onClick={cancelEditPrompt}
+                      style={{ ...btn, color: '#7d8590' }}
+                    >
+                      取消
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
