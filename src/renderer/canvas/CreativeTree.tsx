@@ -4,7 +4,15 @@
 // D.7 节点用自定义组件 IdeaNode（结果标题 + 可行性 + 优缺点风险）。
 
 import { useCallback, useEffect, useRef } from 'react'
-import { Background, Controls, MiniMap, ReactFlow, useNodesInitialized, useReactFlow } from '@xyflow/react'
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  useNodesInitialized,
+  useReactFlow,
+  useStoreApi,
+} from '@xyflow/react'
 import type { NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useTreeStore } from '../store/treeStore'
@@ -12,6 +20,10 @@ import { IdeaNode } from './IdeaNode'
 
 /** 判定"这是拖拽而不是点击"的位移阈值（px） */
 const CLICK_DRAG_TOLERANCE = 4
+
+/** 兜底重测的最大重试次数与间隔（上界很小，避免长命定时器和库自己的测量抢主线程） */
+const MEASURE_RETRY_MAX = 12
+const MEASURE_RETRY_INTERVAL = 70
 
 /**
  * ⚠️ nodeTypes 必须定义在组件**外面**（模块级常量）。
@@ -31,10 +43,84 @@ export function CreativeTree() {
   const closeMenu = useTreeStore((s) => s.closeMenu)
 
   const { fitView, setCenter } = useReactFlow()
+  const store = useStoreApi()
   const nodesInitialized = useNodesInitialized()
   const prevCount = useRef(0)
   const wrapRef = useRef<HTMLDivElement>(null)
   const downRef = useRef<{ x: number; y: number } | null>(null)
+
+  /**
+   * ⚠️ 兜底重测"还没量到尺寸"的节点 —— 修掉「新节点偶尔不画连线、视口也不 fitView」。
+   *
+   * 机制（读 @xyflow/react + @xyflow/system 源码，并直接 dump 库内部 store 实测定案，非猜测）：
+   *   1. 一条边能不能渲染，取决于两端节点是否"已初始化"：
+   *      `isNodeInitialized(n) = !!(n.internals.handleBounds || n.handles?.length) && !!(n.measured.width ...)`。
+   *      不满足则 `getEdgePosition()` 返回 null → EdgeWrapper 直接 `return null` → **DOM 里连边元素都没有**。
+   *      `useNodesInitialized()` 用的是同一个信号，所以下面那个 fitView 会一起失效（视口停在 scale(1)）。
+   *   2. 尺寸只有两种来源：`measured`（元素尺寸）与 `internals.handleBounds`（Handle 位置）。
+   *      库自己的 `useResizeObserver` 用 ResizeObserver 观察每个节点元素，回调里是
+   *      `updates.set(id, { id, nodeElement, force: true })` —— 也就是**库自己也认为"重测必须 force"**。
+   *      但它的 `useNodeObserver` 只在 `[isInitialized, node.hidden]` 变化时 observe，
+   *      **这个依赖里没有元素引用**；一旦某次 observe 没覆盖到（元素还没挂上 / 已被换掉），
+   *      该节点就**永远停在未初始化**：边不画、fitView 不跑，且改选中态 / 触发 resize 都救不回来
+   *      （实测：点完节点边仍为 0；卡住时 dump 库 store 可见 `measured:{}`、`hasHandleBounds:false`）。
+   *   3. 并发压力下稳定复现（probe-d7 ×3 并发：12 次里 2~3 次命中）。手动 `updateNodeInternals(force)`
+   *      后**当场恢复**（edges 0 → 1），所以"主动重测"就是正确的修法。
+   *
+   * ⚠️ 为什么不能直接用官方的 `useUpdateNodeInternals()`：它的**元素查找是同步的**（调用当刻就
+   * `querySelector`），但把"写 store"放进了 `requestAnimationFrame`。并发压力下 rAF 会被饿死/合并，
+   * 于是这个写操作时有时无（第一版修复：单次调用 → 仍 2/12 失败）。
+   * 这里直接拿 `useStoreApi()` 的 store，同步调 `updateNodeInternals(map)` —— 与库自身
+   * ResizeObserver 回调**完全相同的调用**，没有任何延迟。
+   *
+   * ⚠️ 为什么不能用"轮询到某个时刻"就完事：`pending` 必须取自**库内部 store 的 `nodeLookup`**
+   * 而不是我们 zustand store 的 `nodes[].measured`。卡住时我们的 store 永远等不到那次
+   * dimensions change，`nodes[].measured` 一直是空 → 判据永远非空 → 定时器永远不收手，
+   * 每次 nodes 变化又叠一层（第二版 rAF 限 30 帧 → 1/12；第三版 setTimeout 轮询 5 秒 → **反而恶化到 8/15**，
+   * 就是因为这些长命定时器在主线程上和库自己的测量互相抢时间）。所以这里：
+   *   - 判据读库的 `nodeLookup`（真实状态，量到就立刻收敛）；
+   *   - 只在元素**已完成布局**（offsetWidth/Height > 0）时才 force，避免把 0×0 写回去；
+   *   - 重试次数/间隔都是**上界很小的常量**，且一旦全部量到立即停。
+   */
+  useEffect(() => {
+    const read = () => store.getState()
+    const unmeasured = (v: Map<string, { measured?: { width?: number; height?: number } }>) => {
+      const ids: string[] = []
+      for (const [id, n] of v) {
+        if (!n.measured?.width || !n.measured?.height) ids.push(id)
+      }
+      return ids
+    }
+    if (unmeasured(read().nodeLookup).length === 0) return
+
+    let stopped = false
+    let tries = 0
+    const tick = () => {
+      if (stopped) return
+      tries += 1
+      const st = read()
+      const updates = new Map<string, { id: string; nodeElement: HTMLDivElement; force: boolean }>()
+      const pending = unmeasured(st.nodeLookup)
+      for (const id of pending) {
+        const el = st.domNode?.querySelector<HTMLDivElement>(`.react-flow__node[data-id="${id}"]`)
+        if (el && el.offsetWidth > 0 && el.offsetHeight > 0) {
+          updates.set(id, { id, nodeElement: el, force: true })
+        }
+      }
+      if (updates.size > 0) {
+        // React Flow 把该内部类型（Map<string, InternalNodeUpdate>）标成 internal，未从包根导出；
+        // 这里做一次结构等价窄化，避免 import 包内深层路径（那会随上游重构而崩）。
+        st.updateNodeInternals(updates as Parameters<typeof st.updateNodeInternals>[0])
+      }
+      if (pending.length === 0 || tries >= MEASURE_RETRY_MAX) return
+      window.setTimeout(tick, MEASURE_RETRY_INTERVAL)
+    }
+    const timer = window.setTimeout(tick, 0)
+    return () => {
+      stopped = true
+      window.clearTimeout(timer)
+    }
+  }, [nodes, store])
 
   // 节点数量增加时（生成/新增）重新适配视口，保证新节点可见。
   // ⚠️ 必须先等 nodesInitialized：React Flow 靠 ResizeObserver **异步**量节点尺寸，
