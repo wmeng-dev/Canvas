@@ -1,7 +1,9 @@
-// C.2/C.4/C.5 预览面板：选中节点 → 按 contentType 预览 + 版本历史（可翻案）+ 重新生成。
+// C.2/C.4/C.5/D.3 预览面板：选中节点 → 按 contentType 预览 + 版本历史（可翻案）+ 重新生成。
 // 类型分发见 previews/ContentPreview.tsx。
+// D.3：面板宽度可拖左边缘调整（不再固定 340），双击把手复位。
 
-import { useTreeStore } from '../store/treeStore'
+import { useState } from 'react'
+import { useTreeStore, PREVIEW_WIDTH_MAX, PREVIEW_WIDTH_MIN } from '../store/treeStore'
 import { ContentPreview } from '../previews/ContentPreview'
 import type { ContentType } from '../../shared/types'
 
@@ -28,6 +30,30 @@ export function PreviewPanel() {
   const regenerate = useTreeStore((s) => s.regenerate)
   const setVersion = useTreeStore((s) => s.setVersion)
   const regeneratingId = useTreeStore((s) => s.regeneratingId)
+  const width = useTreeStore((s) => s.previewWidth)
+  const setPreviewWidth = useTreeStore((s) => s.setPreviewWidth)
+  const resetPreviewWidth = useTreeStore((s) => s.resetPreviewWidth)
+  const [dragging, setDragging] = useState(false)
+
+  /** 拖左边缘改宽：面板贴右边，指针左移 → 变大。 */
+  const onResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault() // 阻止拖拽时选中文本（不影响 dblclick）
+    const startX = e.clientX
+    const startW = width
+    setDragging(true)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    const onMove = (ev: MouseEvent) => setPreviewWidth(startW + (startX - ev.clientX))
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setDragging(false)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   const contentType = (node?.data.contentType ?? 'markdown') as ContentType
   const versions = node?.data.versions ?? []
@@ -47,16 +73,57 @@ export function PreviewPanel() {
   return (
     <aside
       data-testid="preview-panel"
+      data-width={width}
       style={{
-        width: 340,
-        flex: '0 0 340px',
+        width,
+        flex: `0 0 ${width}px`,
+        minWidth: 0,
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
         borderLeft: '1px solid #21262d',
         background: '#0b0f14',
-        padding: 16,
         boxSizing: 'border-box',
-        overflowY: 'auto',
       }}
     >
+      {/* 拖拽把手：贴左边缘，拖动改宽，双击复位 */}
+      <div
+        data-testid="preview-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="拖动调整预览宽度"
+        title={`拖动调整宽度（${PREVIEW_WIDTH_MIN}–${PREVIEW_WIDTH_MAX}px，双击复位）`}
+        onMouseDown={onResizeStart}
+        onDoubleClick={resetPreviewWidth}
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 7,
+          cursor: 'col-resize',
+          zIndex: 5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: dragging ? '#1f6feb22' : 'transparent',
+        }}
+      >
+        <div
+          style={{
+            width: 2,
+            height: 40,
+            borderRadius: 2,
+            background: dragging ? '#58a6ff' : '#30363d',
+          }}
+        />
+      </div>
+      {/* 滚动区独立成层：把手在它外面，滚内容时把手不会跟着滚走 */}
+      <div
+        data-testid="preview-scroll"
+        style={{ flex: 1, overflowY: 'auto', padding: 16, boxSizing: 'border-box' }}
+      >
       <h2 style={{ fontSize: 13, letterSpacing: 0.5, margin: '0 0 12px', color: '#7d8590' }}>
         节点预览
       </h2>
@@ -167,6 +234,7 @@ export function PreviewPanel() {
           )}
         </div>
       )}
+      </div>
     </aside>
   )
 }

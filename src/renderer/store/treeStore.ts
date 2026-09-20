@@ -9,6 +9,44 @@ import type { AddMcpServerRequest, GeneratorInfo } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
 import type { ContentType, NodeVersion, ProjectFile, TreeNode } from '../../shared/types'
 
+// ---------------- D.3 预览面板宽度（可拖动，不再固定 340） ----------------
+
+export const PREVIEW_WIDTH_MIN = 260
+export const PREVIEW_WIDTH_MAX = 960
+export const PREVIEW_WIDTH_DEFAULT = 340
+/** 拖到上限时至少给左侧画布留出的宽度 */
+const CANVAS_MIN_WIDTH = 360
+const PREVIEW_WIDTH_KEY = 'diverge.previewWidth'
+
+/** 面板宽度上限：取"固定上限"与"视口留白"中的小者，避免把画布挤没。 */
+export function clampPreviewWidth(w: number): number {
+  const viewportMax =
+    typeof window === 'undefined'
+      ? PREVIEW_WIDTH_MAX
+      : Math.max(PREVIEW_WIDTH_MIN, window.innerWidth - CANVAS_MIN_WIDTH)
+  return Math.round(Math.min(Math.max(w, PREVIEW_WIDTH_MIN), Math.min(PREVIEW_WIDTH_MAX, viewportMax)))
+}
+
+/** 读取上次宽度（best-effort：file:// 下 localStorage 可能不可用，失败就回落默认）。 */
+function loadPreviewWidth(): number {
+  try {
+    const raw = localStorage.getItem(PREVIEW_WIDTH_KEY)
+    const v = raw === null ? NaN : Number(raw)
+    if (Number.isFinite(v)) return clampPreviewWidth(v)
+  } catch {
+    /* 无 localStorage（如纯浏览器预览/打包 file://）→ 用默认值 */
+  }
+  return PREVIEW_WIDTH_DEFAULT
+}
+
+function persistPreviewWidth(w: number): void {
+  try {
+    localStorage.setItem(PREVIEW_WIDTH_KEY, String(w))
+  } catch {
+    /* 存不下就算了，不影响本次会话内的拖拽 */
+  }
+}
+
 export interface CreativeNodeData extends Record<string, unknown> {
   label: string
   content?: string
@@ -59,6 +97,9 @@ interface TreeState {
   /** D.1 导出对话框 */
   exportOpen: boolean
 
+  /** D.3 预览面板宽度（可拖边缘调整） */
+  previewWidth: number
+
   init: () => Promise<void>
 
   onNodesChange: (changes: NodeChange<CreativeNode>[]) => void
@@ -91,6 +132,10 @@ interface TreeState {
   // --- D.1 导出 ---
   openExport: () => void
   closeExport: () => void
+
+  // --- D.3 预览面板宽度 ---
+  setPreviewWidth: (w: number) => void
+  resetPreviewWidth: () => void
 }
 
 const seedNodes: CreativeNode[] = [
@@ -181,6 +226,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   aiSettings: null,
   aiBusy: false,
   exportOpen: false,
+  previewWidth: loadPreviewWidth(),
 
   init: async () => {
     const api = window.diverge
@@ -420,4 +466,15 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   // ---------------- D.1 导出 ----------------
   openExport: () => set({ exportOpen: true }),
   closeExport: () => set({ exportOpen: false }),
+
+  // ---------------- D.3 预览面板宽度 ----------------
+  setPreviewWidth: (w) => {
+    const next = clampPreviewWidth(w)
+    persistPreviewWidth(next)
+    set({ previewWidth: next })
+  },
+  resetPreviewWidth: () => {
+    persistPreviewWidth(PREVIEW_WIDTH_DEFAULT)
+    set({ previewWidth: PREVIEW_WIDTH_DEFAULT })
+  },
 }))
