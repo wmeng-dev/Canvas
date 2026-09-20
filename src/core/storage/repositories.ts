@@ -70,6 +70,7 @@ export class ProjectRepository {
       content: input.content ?? '',
       status: input.status ?? 'empty',
       generatorId: input.generatorId ?? null,
+      position: input.position,
       createdAt: ts,
       updatedAt: ts,
     }

@@ -2,7 +2,10 @@
 // DeepSeek 直连（B.5）与 MCP adapter（B.7）都实现 Generator 接口，
 // 主程序通过 GeneratorRegistry 按 id 选择后端，对上层屏蔽差异。
 
-export type ContentType = 'text' | 'markdown' | 'html' | 'svg' | 'image'
+import type { ContentType } from '../../shared/types'
+
+// ContentType 已在 shared 中定义（渲染端预览也需要），此处转出以保持既有导入路径可用。
+export type { ContentType }
 
 /** 一个树节点的生成规格 */
 export interface NodeSpec {

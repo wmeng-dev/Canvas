@@ -7,6 +7,7 @@ export function PreviewPanel() {
   const node = useTreeStore(
     (s) => s.nodes.find((n) => n.id === s.selectedNodeId) ?? null,
   )
+  const openDialog = useTreeStore((s) => s.openDialog)
 
   return (
     <aside
@@ -32,6 +33,22 @@ export function PreviewPanel() {
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10, color: '#e6edf3' }}>
             {node.data.label}
           </div>
+          <button
+            data-testid="branch-from-node"
+            onClick={() => openDialog(node.id)}
+            style={{
+              marginBottom: 14,
+              background: 'transparent',
+              color: '#58a6ff',
+              border: '1px solid #30363d',
+              borderRadius: 6,
+              padding: '5px 10px',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
+            从这里发散
+          </button>
           <pre
             style={{
               whiteSpace: 'pre-wrap',

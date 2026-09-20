@@ -3,6 +3,9 @@
 
 export type NodeStatus = 'empty' | 'pending' | 'done' | 'error'
 
+/** 生成内容类型（主进程 Generator 与渲染端预览共用同一套取值） */
+export type ContentType = 'text' | 'markdown' | 'html' | 'svg' | 'image'
+
 export interface Project {
   id: string
   name: string
@@ -18,6 +21,8 @@ export interface TreeNode {
   content: string
   status: NodeStatus
   generatorId: string | null
+  /** 画布坐标（渲染端生成/布局后回写，便于下次打开保持布局） */
+  position?: { x: number; y: number }
   createdAt: string
   updatedAt: string
 }
