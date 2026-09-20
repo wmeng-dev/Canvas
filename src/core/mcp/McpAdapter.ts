@@ -29,6 +29,9 @@ export class McpAdapter implements Generator {
       contentType: spec.contentType,
     })
     const contentType: ContentType = spec.contentType ?? 'markdown'
+    // 刻意**不解析** JSON：MCP tool 是第三方实现，不遵守我们给 DeepSeek 定的输出契约，
+    // 硬按约定解析有把它的正文吃掉/曲解的风险。这里原样返回，
+    // title / analysis 留空 → 上层显示名回落 prompt 派生标签、界面不显示评估区块（优雅降级）。
     return {
       contentType,
       text,

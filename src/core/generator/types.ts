@@ -2,7 +2,7 @@
 // DeepSeek 直连（B.5）与 MCP adapter（B.7）都实现 Generator 接口，
 // 主程序通过 GeneratorRegistry 按 id 选择后端，对上层屏蔽差异。
 
-import type { ContentType } from '../../shared/types'
+import type { ContentType, IdeaAnalysis } from '../../shared/types'
 
 // ContentType 已在 shared 中定义（渲染端预览也需要），此处转出以保持既有导入路径可用。
 export type { ContentType }
@@ -21,6 +21,13 @@ export interface NodeSpec {
 export interface NodeContent {
   contentType: ContentType
   text: string
+  /**
+   * 结果标题：发散出来的东西叫什么（**不是**用户输入的那句话）。
+   * 生成器给不出时留空 → 上层回落 deriveLabel(prompt)。
+   */
+  title?: string
+  /** 结构化发散评估（可行性/优点/缺点/风险）；给不出时为 undefined */
+  analysis?: IdeaAnalysis | null
   raw?: unknown
   model?: string
   finishedAt: string

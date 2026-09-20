@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { JsonStore } from './store'
 import type {
+  IdeaAnalysis,
   NodeVersion,
   Project,
   ProjectFile,
@@ -13,8 +14,13 @@ function nowIso(): string {
 }
 
 export type NewNodeInput = Partial<TreeNode> & {
+  /** 节点显示名（= 结果标题；生成器给不出时由上层回落成 prompt 派生标签） */
   label: string
   parentId?: string | null
+  /** 首个版本的"结果标题"（可选：逐字保留，供翻案时还原显示名） */
+  title?: string
+  /** 首个版本的结构化评估 */
+  analysis?: IdeaAnalysis | null
   /** 生成该内容的模型名（写入首个版本） */
   model?: string
 }
@@ -22,6 +28,10 @@ export type NewNodeInput = Partial<TreeNode> & {
 export interface NewVersionInput {
   content: string
   contentType?: TreeNode['contentType']
+  /** 这一版的结果标题；给了就同步成节点显示名 */
+  title?: string
+  /** 这一版的结构化评估 */
+  analysis?: IdeaAnalysis | null
   generatorId?: string | null
   model?: string
 }
@@ -107,6 +117,7 @@ export class ProjectRepository {
       prompt: input.prompt ?? '',
       content: input.content ?? '',
       contentType: input.contentType ?? 'markdown',
+      analysis: null,
       status: input.status ?? 'empty',
       generatorId: input.generatorId ?? null,
       versions: [],
@@ -121,12 +132,16 @@ export class ProjectRepository {
         id: randomUUID(),
         content: node.content,
         contentType: node.contentType,
+        title: input.title,
+        analysis: input.analysis ?? null,
         generatorId: node.generatorId,
         model: input.model,
         createdAt: ts,
       }
       node.versions.push(version)
       node.currentVersionId = version.id
+      // 节点上的 analysis 是"当前版本"的快照，与 content / contentType 同理
+      node.analysis = version.analysis ?? null
     }
 
     file.tree.nodes.push(node)
@@ -155,6 +170,7 @@ export class ProjectRepository {
   /**
    * 追加一个内容版本并设为当前（"重新生成"用）。
    * 旧版本一律保留 —— 这是"可翻案"的前提。
+   * 新版本带标题时会同步更新节点显示名（标题属于"这一版"，翻案可整版还原）。
    */
   addVersion(projectId: string, nodeId: string, input: NewVersionInput): TreeNode {
     const file = this.get(projectId)
@@ -165,6 +181,8 @@ export class ProjectRepository {
       id: randomUUID(),
       content: input.content,
       contentType: input.contentType ?? node.contentType,
+      title: input.title,
+      analysis: input.analysis ?? null,
       generatorId: input.generatorId ?? node.generatorId,
       model: input.model,
       createdAt: ts,
@@ -173,6 +191,10 @@ export class ProjectRepository {
     node.currentVersionId = version.id
     node.content = version.content
     node.contentType = version.contentType
+    node.analysis = version.analysis ?? null
+    // 拿不到标题就沿用原显示名 —— 宁可保留已知名字，也不要退化成 prompt 派生标签
+    const nextTitle = version.title?.trim()
+    if (nextTitle) node.label = nextTitle
     if (version.generatorId) node.generatorId = version.generatorId
     node.status = 'done'
     node.updatedAt = ts
@@ -181,7 +203,10 @@ export class ProjectRepository {
     return node
   }
 
-  /** 翻案：把当前版本指回某个历史版本（不删除、不覆盖任何版本）。 */
+  /**
+   * 翻案：把当前版本指回某个历史版本（不删除、不覆盖任何版本）。
+   * 标题与评估同属版本内容，一并还原，否则会出现"正文回到 v1、标题还停在 v2"的错位。
+   */
   setCurrentVersion(projectId: string, nodeId: string, versionId: string): TreeNode {
     const file = this.get(projectId)
     const node = file.tree.nodes.find((n) => n.id === nodeId)
@@ -191,6 +216,9 @@ export class ProjectRepository {
     node.currentVersionId = version.id
     node.content = version.content
     node.contentType = version.contentType
+    node.analysis = version.analysis ?? null
+    const title = version.title?.trim()
+    if (title) node.label = title
     node.generatorId = version.generatorId
     node.updatedAt = nowIso()
     file.project.updatedAt = node.updatedAt

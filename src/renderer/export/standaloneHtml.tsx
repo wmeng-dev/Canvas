@@ -8,6 +8,7 @@
 
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ExportDoc, ExportNode } from '../../core/export'
+import { feasibilityBand, hasAnalysis } from '../../shared/analysis'
 import { ContentPreview } from '../previews/ContentPreview'
 
 const ESC: Record<string, string> = {
@@ -62,6 +63,20 @@ section.node h4, section.node h5, section.node h6 { font-size: 15px; }
 .badges { margin: 0 0 10px; color: #8b949e; font-size: 11px; }
 .badges span { border: 1px solid #30363d; border-radius: 10px; padding: 1px 8px; margin-right: 6px; }
 .prompt { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid #30363d; background: #161b22; color: #8b949e; font-size: 12.5px; }
+/* 发散评估：可行性一行 + 优点/缺点/风险三组 */
+.analysis { margin: 0 0 14px; padding: 12px 14px; background: #161b22; border: 1px solid #21262d; border-radius: 8px; }
+.analysis .feas { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.analysis .feas .label { color: #8b949e; font-size: 12.5px; }
+.analysis .feas .pct { font-size: 18px; font-weight: 700; line-height: 1; }
+.analysis .feas .band { font-size: 11px; border: 1px solid currentColor; border-radius: 10px; padding: 0 7px; }
+.analysis .feas .bar { flex: 1 1 120px; min-width: 120px; height: 6px; border-radius: 3px; background: #30363d; overflow: hidden; }
+.analysis .feas .bar i { display: block; height: 100%; border-radius: 3px; }
+.analysis ul { list-style: none; margin: 0; padding: 0; }
+.analysis li { font-size: 12.5px; color: #c9d1d9; margin: 3px 0; padding-left: 46px; position: relative; }
+.analysis li b { position: absolute; left: 0; font-weight: 600; font-size: 12px; }
+.analysis li.pros b { color: #3fb950; }
+.analysis li.cons b { color: #d29922; }
+.analysis li.risks b { color: #f85149; }
 .content { margin: 0; }
 .content pre.text-block {
   white-space: pre-wrap; word-break: break-word; background: #010409;
@@ -112,6 +127,31 @@ function renderContent(node: ExportNode): string {
   )
 }
 
+/** 评估区块：无评估内容时返回空串（旧节点 / 第三方后端不显示空盒子）。 */
+function renderAnalysis(node: ExportNode): string {
+  const a = node.analysis
+  if (!hasAnalysis(a)) return ''
+  const band = feasibilityBand(a.feasibility)
+  const rows: string[] = []
+  const push = (cls: string, name: string, items: string[]): void => {
+    for (const it of items) rows.push(`<li class="${cls}"><b>${name}</b>${esc(it)}</li>`)
+  }
+  push('pros', '优点', a.pros)
+  push('cons', '缺点', a.cons)
+  push('risks', '风险', a.risks)
+  return [
+    '<div class="analysis">',
+    '<div class="feas">',
+    '<span class="label">可行性</span>',
+    `<span class="pct" style="color:${band.color}">${a.feasibility}%</span>`,
+    `<span class="band" style="color:${band.color}">${band.label}</span>`,
+    `<span class="bar"><i style="width:${a.feasibility}%;background:${band.color}"></i></span>`,
+    '</div>',
+    rows.length ? `<ul>${rows.join('')}</ul>` : '',
+    '</div>',
+  ].join('')
+}
+
 function renderSection(node: ExportNode): string {
   const level = headingLevel(node.depth)
   const tag = `h${level}`
@@ -127,6 +167,7 @@ function renderSection(node: ExportNode): string {
     `<${tag}>${esc(node.label || '未命名')}</${tag}>`,
     `<p class="badges">${badges.join('')}</p>`,
     prompt,
+    renderAnalysis(node),
     renderContent(node),
     `</section>`,
   ].join('\n')

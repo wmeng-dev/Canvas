@@ -14,14 +14,27 @@ import { mapWithConcurrencySettled } from './concurrency'
 
 export const MAX_GENERATE_COUNT = 5
 /** 同批子节点的纵向间距（与渲染端 computePosition 的基础间距保持一致） */
-const SIBLING_SPACING_Y = 150
+const SIBLING_SPACING_Y = 200
 /** 并发上限：一次发散 N 条时同时打到后端的请求数 */
 export const GENERATE_CONCURRENCY = 2
 
+/**
+ * 从 prompt 派生一个短标签 —— **只在生成器给不出结果标题时兜底**
+ * （第三方 MCP 后端返回纯文本、或模型输出没解析出 title）。
+ */
 export function deriveLabel(prompt: string): string {
   const firstLine = (prompt.trim().split(/\r?\n/)[0] ?? '').trim()
   const text = firstLine || '新想法'
   return text.length > 24 ? `${text.slice(0, 24)}…` : text
+}
+
+/**
+ * 节点显示名 = **发散结果标题**，而不是用户输入的那句话。
+ * 拿不到标题才回落到 prompt 派生标签（此时与旧行为一致）。
+ */
+function displayLabel(title: string | undefined, prompt: string): string {
+  const t = (title ?? '').trim()
+  return t || deriveLabel(prompt)
 }
 
 function pickGenerator(svc: AppServices, generatorId?: string): Generator {
@@ -63,7 +76,10 @@ export async function generateNode(
     })
     const node = svc.repo.addNode(req.projectId, {
       parentId: req.parentNodeId ?? null,
-      label: deriveLabel(prompt),
+      // 显示名用"发散结果标题"，绝不直接显示用户输入的那句话
+      label: displayLabel(content.title, prompt),
+      title: content.title,
+      analysis: content.analysis ?? null,
       prompt,
       content: content.text,
       contentType: content.contentType,
@@ -95,7 +111,8 @@ export async function generateNode(
 
 /**
  * 重新生成：为**已存在**节点再产出一版内容，追加为新版本。
- * 旧版本保留 → 可翻案回退。节点 label 不变（同一条想法，换一版内容）。
+ * 旧版本保留 → 可翻案回退。标题与评估跟随"这一版"一起换（翻案时整版还原），
+ * 所以节点显示名会随之更新；拿不到新标题则沿用原名。
  */
 export async function regenerateNode(
   svc: AppServices,
@@ -121,6 +138,8 @@ export async function regenerateNode(
   return svc.repo.addVersion(req.projectId, node.id, {
     content: content.text,
     contentType: content.contentType,
+    title: content.title,
+    analysis: content.analysis ?? null,
     generatorId: generator.id,
     model: content.model,
   })

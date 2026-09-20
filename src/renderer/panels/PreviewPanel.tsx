@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import { useTreeStore, PREVIEW_WIDTH_MAX, PREVIEW_WIDTH_MIN } from '../store/treeStore'
+import { AnalysisBlock } from './AnalysisBlock'
 import { ContentPreview } from '../previews/ContentPreview'
 import type { ContentType } from '../../shared/types'
 
@@ -163,6 +164,29 @@ export function PreviewPanel() {
               {busy ? '重新生成中…' : '重新生成'}
             </button>
           </div>
+
+          {/* 原始描述：不再作为节点标题，但保留为次要信息（标签页里悬停也能看到） */}
+          {node.data.prompt && (
+            <div
+              data-testid="preview-prompt"
+              style={{
+                marginBottom: 12,
+                padding: '7px 10px',
+                borderLeft: '3px solid #30363d',
+                background: '#161b22',
+                borderRadius: '0 6px 6px 0',
+                fontSize: 12,
+                lineHeight: 1.6,
+                color: '#8b949e',
+                wordBreak: 'break-word',
+              }}
+            >
+              <span style={{ color: '#6e7681' }}>原始描述：</span>
+              {node.data.prompt}
+            </div>
+          )}
+
+          <AnalysisBlock analysis={node.data.analysis} />
 
           <ContentPreview contentType={contentType} content={node.data.content ?? ''} />
 

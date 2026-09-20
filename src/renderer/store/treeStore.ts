@@ -7,7 +7,7 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import type { AddMcpServerRequest, GeneratorInfo } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
-import type { ContentType, NodeVersion, ProjectFile, TreeNode } from '../../shared/types'
+import type { ContentType, IdeaAnalysis, NodeVersion, ProjectFile, TreeNode } from '../../shared/types'
 
 // ---------------- D.3 预览面板宽度（可拖动，不再固定 340） ----------------
 
@@ -48,11 +48,15 @@ function persistPreviewWidth(w: number): void {
 }
 
 export interface CreativeNodeData extends Record<string, unknown> {
+  /** 结果标题（发散出来的东西叫什么），由生成器给出、回落到 prompt 派生标签 */
   label: string
   content?: string
   /** 预览用：决定用 markdown / html(沙箱) / svg(沙箱) / text 渲染 */
   contentType?: ContentType
+  /** 结构化发散评估（可行性/优点/缺点/风险）；旧节点或第三方后端可能没有 */
+  analysis?: IdeaAnalysis | null
   status?: string
+  /** 用户当初输入的那句话（不再作为节点标题，仅作次要信息展示） */
   prompt?: string
   /** 父节点 id（根层为 null）；用于布局与"兄弟计数" */
   parentId?: string | null
@@ -141,6 +145,7 @@ interface TreeState {
 const seedNodes: CreativeNode[] = [
   {
     id: 'seed-root',
+    type: 'idea',
     position: { x: 0, y: 0 },
     data: { label: '创意主题', content: '（未连接主进程的预览模式）', parentId: null },
   },
@@ -150,11 +155,14 @@ const seedNodes: CreativeNode[] = [
 function toCreativeNode(n: TreeNode, index: number): CreativeNode {
   return {
     id: n.id,
-    position: n.position ?? { x: 0, y: index * 150 },
+    // 自定义节点组件（canvas/IdeaNode.tsx）读 data.label 当结果标题渲染
+    type: 'idea',
+    position: n.position ?? { x: 0, y: index * ROOT_SPACING_Y },
     data: {
       label: n.label || '未命名',
       content: n.content,
       contentType: n.contentType ?? 'markdown',
+      analysis: n.analysis ?? null,
       status: n.status,
       prompt: n.prompt,
       parentId: n.parentId,
@@ -175,6 +183,7 @@ function mergeNode(nodes: CreativeNode[], updated: TreeNode): CreativeNode[] {
             label: updated.label,
             content: updated.content,
             contentType: updated.contentType ?? 'markdown',
+            analysis: updated.analysis ?? null,
             status: updated.status,
             prompt: updated.prompt,
             versions: updated.versions ?? [],
@@ -196,16 +205,25 @@ function fileToGraph(file: ProjectFile): { nodes: CreativeNode[]; edges: Edge[] 
   return { nodes, edges }
 }
 
+/**
+ * 画布布局间距：节点卡片带标题 + 可行性 + 三行要点，比默认单行节点高得多，
+ * 间距太近会重叠（卡片实测高度约 150px）。x 方向同理要给卡片宽度留余量。
+ * ⚠️ Y 间距必须与主进程 core/generate-node.ts 的 SIBLING_SPACING_Y 保持一致。
+ */
+export const ROOT_SPACING_Y = 200
+const CHILD_SPACING_Y = 200
+const CHILD_SPACING_X = 320
+
 /** 新节点坐标：根层纵向排布；子节点在父节点右侧按兄弟序号展开。 */
 export function computePosition(
   nodes: CreativeNode[],
   parentId: string | null,
   siblings: number,
 ): { x: number; y: number } {
-  if (!parentId) return { x: 0, y: nodes.length * 150 }
+  if (!parentId) return { x: 0, y: nodes.length * ROOT_SPACING_Y }
   const parent = nodes.find((n) => n.id === parentId)
-  if (!parent) return { x: 0, y: nodes.length * 150 }
-  return { x: parent.position.x + 280, y: parent.position.y + siblings * 150 }
+  if (!parent) return { x: 0, y: nodes.length * ROOT_SPACING_Y }
+  return { x: parent.position.x + CHILD_SPACING_X, y: parent.position.y + siblings * CHILD_SPACING_Y }
 }
 
 export const useTreeStore = create<TreeState>((set, get) => ({
@@ -283,12 +301,16 @@ export const useTreeStore = create<TreeState>((set, get) => ({
           const label = count === 1 ? trimmed : `${trimmed}（方向 ${i + 1}）`
           return {
             id: `local-${Date.now()}-${i}`,
-            position: { x: position.x, y: position.y + i * 150 },
+            type: 'idea',
+            position: { x: position.x, y: position.y + i * CHILD_SPACING_Y },
             data: {
-              label: label.slice(0, 24),
+              // 纯浏览器占位没有生成器，只能拿输入兜底；界面明确标注是占位
+              label: `（占位）${label.slice(0, 24)}`,
               content: `# ${label}\n\n（占位内容，未连接主进程）`,
               contentType: contentType ?? 'markdown',
+              analysis: null,
               status: 'done',
+              prompt: trimmed,
               parentId: dialogParentId,
             },
           }

@@ -9,7 +9,8 @@
 //   text     → 围栏代码块（保住换行与空格）
 //   html/svg → 围栏代码块（原文可复制，且不会在导出文档里被当标记执行）
 
-import type { ContentType, ProjectFile, TreeNode } from '../shared/types'
+import type { ContentType, IdeaAnalysis, ProjectFile, TreeNode } from '../shared/types'
+import { feasibilityBand } from '../shared/analysis'
 
 export type ExportFormat = 'markdown' | 'html'
 
@@ -18,10 +19,14 @@ export type ExportScope = 'tree' | 'path'
 
 export interface ExportNode {
   id: string
+  /** 结果标题（节点显示名） */
   label: string
+  /** 用户当初输入的那句话（导出文档里作为"提示词"附注） */
   prompt: string
   content: string
   contentType: ContentType
+  /** 发散评估（可行性/优点/缺点/风险）；旧数据或第三方后端可能为空 */
+  analysis?: IdeaAnalysis | null
   /** 层级：0 = 根 */
   depth: number
   /** 当前版本序号（从 1 起）；无版本时为 0 */
@@ -46,6 +51,7 @@ function toExportNode(node: TreeNode, depth: number): ExportNode {
     prompt: node.prompt,
     content: node.content,
     contentType: node.contentType,
+    analysis: node.analysis ?? null,
     depth,
     versionNumber: idx >= 0 ? idx + 1 : 0,
     versionCount: node.versions.length,
@@ -121,6 +127,22 @@ function fence(content: string, lang: string): string {
   return `${bar}${lang}\n${content}\n${bar}`
 }
 
+/**
+ * 评估区块（markdown）：4 行紧凑排版，便于人和脚本都读得懂。
+ * 没有评估内容时返回空数组 —— 旧节点/第三方后端不该出现一个空标题。
+ */
+export function analysisMarkdownLines(analysis: IdeaAnalysis | null | undefined): string[] {
+  if (!analysis) return []
+  const { feasibility, pros, cons, risks } = analysis
+  const hasAny = pros.length > 0 || cons.length > 0 || risks.length > 0 || feasibility > 0
+  if (!hasAny) return []
+  const lines = [`**可行性**：${feasibility}%（${feasibilityBand(feasibility).label}）`]
+  if (pros.length) lines.push(`**优点**：${pros.join('；')}`)
+  if (cons.length) lines.push(`**缺点**：${cons.join('；')}`)
+  if (risks.length) lines.push(`**风险**：${risks.join('；')}`)
+  return lines
+}
+
 export function renderMarkdown(doc: ExportDoc): string {
   const scopeLabel = doc.scope === 'path' ? '收敛路径（根 → 选中节点）' : '完整发散树'
   const lines: string[] = []
@@ -139,8 +161,14 @@ export function renderMarkdown(doc: ExportDoc): string {
     const level = Math.min(n.depth + 2, 6)
     lines.push(`${'#'.repeat(level)} ${n.label || '未命名'}`)
     lines.push('')
+    // 原始输入不再当标题，但仍要留在文档里（"当初问的是什么"是重要上下文）
     if (n.prompt) {
       lines.push(`> 提示词：${n.prompt}`)
+      lines.push('')
+    }
+    const analysis = analysisMarkdownLines(n.analysis)
+    if (analysis.length) {
+      lines.push(...analysis)
       lines.push('')
     }
     if (n.versionCount > 1) {

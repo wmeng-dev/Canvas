@@ -6,7 +6,8 @@
 // 用于验证 HTML/SVG 沙箱是否真的挡住脚本（正常模式下 prompt 会被转义）。
 
 import type { Generator, NodeContent, NodeSpec } from './types'
-import type { ContentType } from '../../shared/types'
+import type { ContentType, IdeaAnalysis } from '../../shared/types'
+import { clampFeasibility, MAX_TITLE_LENGTH, truncate } from '../../shared/analysis'
 
 function escapeHtml(s: string): string {
   return s
@@ -17,6 +18,29 @@ function escapeHtml(s: string): string {
 }
 
 const LIST_ITEMS = ['占位内容 1', '占位内容 2', '占位内容 3']
+
+/**
+ * 占位"结果标题"：**刻意不复述用户输入**，用来验证"节点显示的是发散结果标题而不是原描述"。
+ * 带序号，让"重新生成"产出的每一版标题可区分。
+ */
+function fakeTitle(prompt: string, seq: number): string {
+  const short = truncate(prompt.replace(/\s+/g, ' '), 16)
+  return truncate(`发散方案 #${seq}：${short}`, MAX_TITLE_LENGTH)
+}
+
+/**
+ * 占位评估：可行性与 prompt / 版本号相关，保证确定性又逐版可区分；
+ * 三条要点用固定短句，便于探针稳定断言。
+ */
+function fakeAnalysis(prompt: string, seq: number): IdeaAnalysis {
+  const base = 55 + ((prompt.length * 7 + seq * 13) % 40)
+  return {
+    feasibility: clampFeasibility(base),
+    pros: ['实现成本可控', '与父节点方向一致', '可小步验证'],
+    cons: ['差异化不够突出', '依赖上游数据质量'],
+    risks: ['前提不成立时整体失效', '并行推进可能摊薄投入'],
+  }
+}
 
 function markdownHeading(subject: string, seq: number): string {
   // 注意：markdown 预览不解析内嵌 HTML（安全取舍），所以版本标记必须用 markdown 原生语法，
@@ -102,7 +126,14 @@ export function createFakeGenerator(
           break
       }
 
-      return { contentType: type, text, model: 'fake', finishedAt: new Date().toISOString() }
+      return {
+        contentType: type,
+        text,
+        title: fakeTitle(raw, n),
+        analysis: fakeAnalysis(raw, n),
+        model: 'fake',
+        finishedAt: new Date().toISOString(),
+      }
     },
   }
 }

@@ -59,7 +59,16 @@ ok('ensureProject is idempotent')
   assert.strictEqual(res.items.length, 1)
   assert.deepStrictEqual(res.failures, [])
   const n1 = res.items[0].node
-  assert.strictEqual(n1.label, '方向 A：把核心体验做减法')
+  // D.7：节点显示名是**发散结果标题**，不是用户输入的那句话
+  assert.strictEqual(n1.label, '发散方案 #1：方向 A：把核心体验做减法')
+  assert.notStrictEqual(n1.label, n1.prompt, 'label 不再是 prompt 本身')
+  assert.strictEqual(n1.prompt, '方向 A：把核心体验做减法')
+  // 结果标题存在版本上，翻案时能整版还原
+  assert.strictEqual(n1.versions[0].title, n1.label)
+  assert.ok(n1.analysis, '结构化评估随内容一起落库')
+  assert.ok(n1.analysis.feasibility > 0 && n1.analysis.feasibility <= 100)
+  assert.strictEqual(n1.analysis.pros.length, 3)
+  assert.deepStrictEqual(n1.analysis, n1.versions[0].analysis, '节点上的 analysis 是当前版本的快照')
   assert.strictEqual(n1.status, 'done')
   assert.strictEqual(n1.generatorId, 'fake')
   assert.strictEqual(n1.parentId, rootId)
@@ -72,7 +81,7 @@ ok('ensureProject is idempotent')
   assert.strictEqual(n1.versions.length, 1)
   assert.strictEqual(n1.currentVersionId, n1.versions[0].id)
   assert.strictEqual(n1.versions[0].content, n1.content)
-  ok('single diverge creates node + edge + initial version')
+  ok('single diverge creates node + edge + initial version (title/analysis persisted)')
 
   // 5. 落盘校验
   const after = svc.repo.get(projectId)
@@ -95,12 +104,23 @@ ok('ensureProject is idempotent')
   assert.strictEqual(rootSibling.items[0].edge, null)
   ok('root-level node has no edge')
 
-  // 8. label 截断
+  // 8. 生成器给不给出标题的两种情形
+  // 8a. 给了标题 → 标题长度受 MAX_TITLE_LENGTH 约束，且带得出标题的形状
   const longPrompt = '这是一个非常非常非常长的想法标题需要被截断处理才不会撑爆节点宽度'
   const longNode = await generateNode(svc, { projectId, parentNodeId: rootId, prompt: longPrompt })
-  assert.strictEqual(longNode.items[0].node.label.length, 25)
-  assert.ok(longNode.items[0].node.label.endsWith('…'))
-  ok('label truncated to 24 chars + ellipsis')
+  const longLabel = longNode.items[0].node.label
+  assert.ok(/^发散方案 #\d+：/.test(longLabel), `fake 结果标题形状: ${longLabel}`)
+  assert.ok(longLabel.length <= 40, `标题受 MAX_TITLE_LENGTH 约束: ${longLabel.length}`)
+  assert.notStrictEqual(longLabel, longPrompt)
+  // 8b. 给不出标题（flaky 只返回纯文本）→ 回落 prompt 派生标签（截断 24 字 + 省略号）
+  const noTitle = await generateNode(svc, {
+    projectId, parentNodeId: rootId, prompt: longPrompt, generatorId: 'flaky',
+  })
+  assert.strictEqual(noTitle.items[0].node.label.length, 25)
+  assert.ok(noTitle.items[0].node.label.endsWith('…'))
+  assert.strictEqual(noTitle.items[0].node.versions[0].title, undefined)
+  assert.ok(!noTitle.items[0].node.analysis, '给不出评估时节点上没有 analysis')
+  ok('title from generator, fallback to prompt-derived label (24 chars + ellipsis)')
 
   // 9. contentType 透传
   const htmlRes = await generateNode(svc, {
@@ -121,8 +141,9 @@ ok('ensureProject is idempotent')
     projectId, parentNodeId: rootId, prompt: '批量方向', count: 3, position: { x: 500, y: 100 },
   })
   assert.strictEqual(batch.items.length, 3)
+  // 间距须与渲染端 computePosition 一致（节点卡片变高，已从 150 调到 200）
   assert.deepStrictEqual(batch.items.map((i) => i.node.position), [
-    { x: 500, y: 100 }, { x: 500, y: 250 }, { x: 500, y: 400 },
+    { x: 500, y: 100 }, { x: 500, y: 300 }, { x: 500, y: 500 },
   ])
   assert.deepStrictEqual(batch.items.map((i) => i.node.parentId), [rootId, rootId, rootId])
   assert.ok(batch.items.every((i, k) => i.edge && i.edge.source === rootId && i.edge.target === i.node.id))
@@ -158,15 +179,23 @@ ok('ensureProject is idempotent')
   // 14. 重新生成 → 追加新版本（旧版本保留）
   const target = res.items[0].node
   const v1Content = target.content
+  const v1Label = target.label
+  const v1Analysis = target.analysis
   const regenerated = await regenerateNode(svc, { projectId, nodeId: target.id })
   assert.strictEqual(regenerated.versions.length, 2)
   assert.strictEqual(regenerated.currentVersionId, regenerated.versions[1].id)
   assert.strictEqual(regenerated.content, regenerated.versions[1].content)
-  assert.strictEqual(regenerated.label, target.label, 'label unchanged on regenerate')
+  // 标题与评估属于"这一版"，换版会一起换（V1 的取值仍完整留在版本表里）
+  assert.strictEqual(regenerated.versions[1].title, regenerated.label)
+  assert.notStrictEqual(regenerated.label, v1Label, 'label follows the new version title')
+  assert.notStrictEqual(regenerated.label, regenerated.prompt, 'label is never the raw prompt')
+  assert.ok(regenerated.analysis, 'new version carries its own analysis')
+  assert.strictEqual(regenerated.versions[0].title, v1Label, 'V1 title preserved verbatim')
+  assert.deepStrictEqual(regenerated.versions[0].analysis, v1Analysis, 'V1 analysis preserved verbatim')
   // 占位生成器每次产出都带序号 → 两个版本内容可区分（真实模型同样不会两次完全一致）
   assert.notStrictEqual(regenerated.content, v1Content)
   assert.strictEqual(regenerated.versions[0].content, v1Content, 'v1 preserved verbatim')
-  ok('regenerate appends v2 with distinct content, keeps v1')
+  ok('regenerate appends v2 with distinct content + title + analysis, keeps v1')
 
   // 14b. 换 prompt 重新生成 → 内容确实变化
   const newPrompt = await regenerateNode(svc, { projectId, nodeId: target.id, prompt: '完全不同的方向' })
@@ -181,13 +210,21 @@ ok('ensureProject is idempotent')
   assert.strictEqual(asSvg.versions.length, 4)
   ok('regenerate can switch contentType (v4)')
 
-  // 16. 翻案：把当前版本指回 v1，内容回退但版本一个不少
+  // 16. 翻案：把当前版本指回 v1，内容/标题/评估回退但版本一个不少
   const reverted = svc.repo.setCurrentVersion(projectId, target.id, target.versions[0].id)
   assert.strictEqual(reverted.currentVersionId, target.versions[0].id)
   assert.strictEqual(reverted.content, v1Content)
   assert.strictEqual(reverted.contentType, 'markdown', 'type reverts with content')
+  assert.strictEqual(reverted.label, v1Label, '标题随版本一起回退（否则会"正文 v1、标题 v2"错位）')
+  assert.deepStrictEqual(reverted.analysis, v1Analysis, '评估随版本一起回退')
   assert.strictEqual(reverted.versions.length, 4, 'no version is deleted')
-  ok('revert (翻案) restores v1 content while keeping all versions')
+  // 再翻回最新版，标题要跟着回去
+  const live = svc.repo.get(projectId).tree.nodes.find((n) => n.id === target.id)
+  const latestVer = live.versions[live.versions.length - 1]
+  const forward = svc.repo.setCurrentVersion(projectId, target.id, latestVer.id)
+  assert.strictEqual(forward.label, latestVer.title)
+  assert.deepStrictEqual(forward.analysis, latestVer.analysis)
+  ok('revert (翻案) restores content + title + analysis while keeping all versions')
 
   // 17. 翻案到不存在的版本 → 抛错
   let badRevert = false

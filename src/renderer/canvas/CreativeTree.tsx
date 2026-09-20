@@ -1,14 +1,24 @@
 // C.1/C.2/C.3/C.5 画布：用 @xyflow/react 渲染创意树，节点/边/选中态由 Zustand store 驱动。
 // 新节点后自动 fitView；右键节点弹出上下文菜单（发散 / 重新生成）。
 // 缩略图（MiniMap）做「快速定位」：拖拽平移 + 滚轮缩放 + 单击跳转。
+// D.7 节点用自定义组件 IdeaNode（结果标题 + 可行性 + 优缺点风险）。
 
 import { useCallback, useEffect, useRef } from 'react'
 import { Background, Controls, MiniMap, ReactFlow, useNodesInitialized, useReactFlow } from '@xyflow/react'
+import type { NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useTreeStore } from '../store/treeStore'
+import { IdeaNode } from './IdeaNode'
 
 /** 判定"这是拖拽而不是点击"的位移阈值（px） */
 const CLICK_DRAG_TOLERANCE = 4
+
+/**
+ * ⚠️ nodeTypes 必须定义在组件**外面**（模块级常量）。
+ * 放在组件里每次都生成新对象 → React Flow 认为节点类型变了 → 整棵树重新挂载
+ * （表现为每次渲染都丢选中态/重测量，且控制台会警告）。
+ */
+const nodeTypes: NodeTypes = { idea: IdeaNode }
 
 export function CreativeTree() {
   const nodes = useTreeStore((s) => s.nodes)
@@ -82,6 +92,7 @@ export function CreativeTree() {
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
