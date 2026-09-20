@@ -19,7 +19,14 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    /* 显式限定自动纳入的全局类型包。
+       TS 会**隐式**把 node_modules/@types 下的所有包都当成类型库，而本机 node_modules
+       是"不完整 npm 拷贝"的混合体，一旦里面出现残缺的 @types（如缺 index.d.ts），
+       就会以 TS2688 打断整个类型检查。与 tsconfig.main.json / tsconfig.test.json 保持一致。 */
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src/renderer",
