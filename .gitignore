@@ -16,6 +16,9 @@ userData/
 # Logs / temp probes
 *.log
 .a*.log
+# Local verification artifacts (electron screenshots / probes)
+/canvas-screenshot.png
+probe-*.cjs
 # OS
 Thumbs.db
 Desktop.ini
