@@ -36,6 +36,8 @@ export const IPC = {
   setNodeCollapsed: 'ideasprout:setNodeCollapsed',
   setNodeArchived: 'ideasprout:setNodeArchived',
   setNodeColor: 'ideasprout:setNodeColor',
+  /** idea 节点拖动后回写流坐标（持久化，重进画布保持位置） */
+  setNodePosition: 'ideasprout:setNodePosition',
   listProjects: 'ideasprout:listProjects',
   createProject: 'ideasprout:createProject',
   switchProject: 'ideasprout:switchProject',
@@ -156,6 +158,14 @@ export interface SetNodeColorRequest {
   projectId: string
   nodeId: string
   color: string | null
+}
+
+/** idea 节点拖动后回写流坐标 */
+export interface SetNodePositionRequest {
+  projectId: string
+  nodeId: string
+  x: number
+  y: number
 }
 
 /** 画布 tab 条：列出所有画布（按最近更新倒序） */
@@ -317,6 +327,8 @@ export interface IdeaSproutApi {
   setNodeArchived(req: SetNodeArchivedRequest): Promise<TreeNode[]>
   /** 改卡片颜色（null = 恢复默认） */
   setNodeColor(req: SetNodeColorRequest): Promise<TreeNode>
+  /** idea 节点拖动后回写坐标 */
+  setNodePosition(req: SetNodePositionRequest): Promise<TreeNode>
   /** 列出所有画布（tab 条用，按最近更新倒序） */
   listProjects(): Promise<ListProjectsResponse>
   /** 新建空白画布并切过去；返回新画布的完整内容 */
