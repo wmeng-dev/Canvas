@@ -23,7 +23,7 @@ function ok(name) {
 }
 
 function makeSvc() {
-  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-canvases-'))
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-canvases-'))
   const svc = createServices({ dataDir: baseDir, secrets: plaintextSecretBox(), fakeGenerator: true })
   return svc
 }

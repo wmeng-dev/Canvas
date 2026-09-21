@@ -39,7 +39,7 @@ export function ExportDialog() {
     setBusy(false)
     setFormat('markdown')
     setScope('tree')
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) {
       setFile(null)
       return
@@ -79,7 +79,7 @@ export function ExportDialog() {
 
   const doExport = async () => {
     if (!doc) return
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) {
       setResult({ ok: false, text: '需要主进程支持才能导出到文件。' })
       return

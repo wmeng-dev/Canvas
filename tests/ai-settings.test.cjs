@@ -18,7 +18,7 @@ const { syncAiBackends, buildSettingsView } = require('../dist-test/core/ai-back
 let passed = 0
 function ok(name) { passed++; console.log('  ✓', name) }
 
-const base = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-ai-'))
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-ai-'))
 
 // 可用的"假加密盒"：能证明落盘的是密文而不是明文（真实实现是 safeStorage）
 const fakeBox = {
@@ -114,7 +114,7 @@ const EXAMPLE_SERVER = path.join(__dirname, '..', 'dist-test', 'core', 'mcp-serv
         name: '本地示例 Server',
         command: process.execPath,
         args: [EXAMPLE_SERVER],
-        env: { DIVERGE_MCP_FAKE: '1' },
+        env: { IDEASPROUT_MCP_FAKE: '1' },
         enabled: true,
       },
     ],

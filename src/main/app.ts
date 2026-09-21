@@ -6,6 +6,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as http from 'http'
 import { createServices } from '../core/services'
+import { migrateLegacyDataDir } from '../core/storage/data-dir'
 import type { AppServices } from '../core/services'
 import { registerIpcHandlers, syncAiBackendsOnStartup } from './ipc/handlers'
 import { createSecretBox } from './secret-box'
@@ -15,11 +16,19 @@ const DEV_SERVER_URL = 'http://localhost:5173'
 /** 依据环境变量组装主进程服务。 */
 export function createAppServices(): AppServices {
   const dataDir =
-    process.env.DIVERGE_DATA_DIR || path.join(app.getPath('userData'), 'diverge')
+    process.env.IDEASPROUT_DATA_DIR || path.join(app.getPath('userData'), 'ideasprout')
+  // 应用改名后数据目录会整体挪位（父目录 = 应用名，子目录 = 品牌名），
+  // 不迁移的话用户会以为"画布全没了"。这里把旧目录**复制**过来（旧目录保留不动）。
+  if (!process.env.IDEASPROUT_DATA_DIR) {
+    const migration = migrateLegacyDataDir(app.getPath('userData'), dataDir)
+    if (migration.migrated) {
+      console.log(`[ideasprout] 已迁移旧数据目录：${migration.from} → ${migration.to}（旧目录保留）`)
+    }
+  }
   // 本地示例 MCP Server：编译产物就在 dist-electron/core/mcp-server/ 下。
   // 用 electron 自身的可执行文件当 Node 运行时 —— 子进程加 ELECTRON_RUN_AS_NODE=1 即退化为 Node，
   // 这样打包后不必额外依赖系统 node。
-  // ⚠️ DIVERGE_DATA_DIR 必须**显式注入**：MCP SDK 的 StdioClientTransport 只继承一份
+  // ⚠️ IDEASPROUT_DATA_DIR 必须**显式注入**：MCP SDK 的 StdioClientTransport 只继承一份
   // 安全白名单环境变量（Windows 上是 APPDATA/PATH/TEMP 等，见 client/stdio.js 的
   // DEFAULT_INHERITED_ENV_VARS），它不在白名单里，不注入的话示例 Server 就找不到画布数据，
   // 只读 tool（list_projects / get_tree / get_node）会报"找不到数据目录"。
@@ -30,23 +39,23 @@ export function createAppServices(): AppServices {
     dataDir,
     secrets: createSecretBox(),
     deepseekApiKey: process.env.DEEPSEEK_API_KEY || undefined,
-    fakeGenerator: process.env.DIVERGE_FAKE_GENERATOR === '1',
+    fakeGenerator: process.env.IDEASPROUT_FAKE_GENERATOR === '1',
     exampleMcpServer: {
       name: '本地示例 Server',
       command: process.execPath,
       args: [exampleScript],
       env: {
         ELECTRON_RUN_AS_NODE: '1',
-        DIVERGE_MCP_FAKE: '1',
-        DIVERGE_DATA_DIR: dataDir,
+        IDEASPROUT_MCP_FAKE: '1',
+        IDEASPROUT_DATA_DIR: dataDir,
       },
     },
   })
 }
 
-/** 是否加载已构建的渲染产物（打包后、或显式 DIVERGE_FORCE_DIST=1）。 */
+/** 是否加载已构建的渲染产物（打包后、或显式 IDEASPROUT_FORCE_DIST=1）。 */
 export function shouldLoadDist(): boolean {
-  return app.isPackaged || process.env.DIVERGE_FORCE_DIST === '1'
+  return app.isPackaged || process.env.IDEASPROUT_FORCE_DIST === '1'
 }
 
 // 开发模式：等 Vite dev server 就绪再 loadURL。
@@ -72,7 +81,7 @@ export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
-    title: '发散创意画布 · Diverge',
+    title: '风衍 IdeaSprout',
     backgroundColor: '#0d1117',
     // 窗口/任务栏图标：开发态从源码目录取（打包后由 exe/dmg 自带图标，找不到就退回默认）。
     icon: fs.existsSync(path.join(app.getAppPath(), 'build', 'icon.ico'))

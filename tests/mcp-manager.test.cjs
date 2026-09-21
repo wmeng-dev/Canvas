@@ -1,5 +1,5 @@
 // B.7 验证：McpClientManager + McpAdapter —— 真实拉起子进程 MCP Server（stdio）。
-// 用 DIVERGE_MCP_FAKE=1 让子进程使用确定性假生成器，避免联网。
+// 用 IDEASPROUT_MCP_FAKE=1 让子进程使用确定性假生成器，避免联网。
 // 运行：先编译测试构建，再 `node tests/mcp-manager.test.cjs`
 const path = require('path')
 const fs = require('fs')
@@ -18,10 +18,10 @@ const { McpAdapter } = require('../dist-test/core/mcp/McpAdapter')
 
   // 给子进程一份真实的画布数据目录。**必须在 connect 之前设好**：
   // 子进程的环境变量在 spawn 那一刻就固定了。
-  // ⚠️ 这也顺便验证了 app.ts 必须显式注入 DIVERGE_DATA_DIR 的必要性 ——
+  // ⚠️ 这也顺便验证了 app.ts 必须显式注入 IDEASPROUT_DATA_DIR 的必要性 ——
   // SDK 只继承安全白名单变量，这里靠 {...process.env} 显式带上。
   const T = '2024-01-01T00:00:00.000Z'
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-mgr-'))
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-mgr-'))
   const projectsDir = path.join(dataDir, 'projects')
   fs.mkdirSync(projectsDir, { recursive: true })
   fs.writeFileSync(
@@ -42,7 +42,7 @@ const { McpAdapter } = require('../dist-test/core/mcp/McpAdapter')
       },
     }),
   )
-  process.env.DIVERGE_DATA_DIR = dataDir
+  process.env.IDEASPROUT_DATA_DIR = dataDir
 
   const manager = new McpClientManager()
 
@@ -50,7 +50,7 @@ const { McpAdapter } = require('../dist-test/core/mcp/McpAdapter')
     id: 'example',
     command: process.execPath,
     args: [serverPath],
-    env: { ...process.env, DIVERGE_MCP_FAKE: '1' },
+    env: { ...process.env, IDEASPROUT_MCP_FAKE: '1' },
   })
   assert.ok(toolNames.includes('generate'), 'tools: ' + toolNames.join(','))
   ok('spawned child MCP server over stdio; exposes "generate"')

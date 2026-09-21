@@ -1,6 +1,6 @@
-# 发散创意画布桌面应用 · 开发计划（小步迭代版）
+# 风衍 IdeaSprout 桌面应用 · 开发计划（小步迭代版）
 
-> 配套文档：`docs/发散创意画布桌面应用_方案.md`（纲领）、`docs/发散创意画布_实现计划_Phase0-1.md`（架构与代码骨架）
+> 配套文档：`IdeaSprout桌面应用_方案.md`（纲领）、`IdeaSprout_实现计划_Phase0-1.md`（架构与代码骨架）
 > 本文件是**执行层面的开发计划**，核心原则：**一个功能一步、做一步验证一步、每步本地提交、确认后再上传。**
 
 ---
@@ -86,9 +86,9 @@
 
 **B.1 Electron 空壳能启动** ✅（代码完成，已提交 `c54db8c`）
 - 目标：运行后弹出窗口并显示一个占位页面。
-- 动作：`src/main/main.ts` 创建 `BrowserWindow`（开发模式轮询 Vite 5173 端口就绪再 `loadURL`）；`src/renderer/index.html` + `main.tsx` 渲染 `<div>Diverge OK</div>`；`vite.config.ts` 配 renderer；`package.json` 加 `dev` 脚本（`build:main` + vite + electron）。
+- 动作：`src/main/main.ts` 创建 `BrowserWindow`（开发模式轮询 Vite 5173 端口就绪再 `loadURL`）；`src/renderer/index.html` + `main.tsx` 渲染 `<div>IdeaSprout OK</div>`；`vite.config.ts` 配 renderer；`package.json` 加 `dev` 脚本（`build:main` + vite + electron）。
 - 验证：`tsc` 类型检查 + `build:main` 编译均通过（已验证）。**窗口弹出需在 Windows 真机 `npm run dev` 确认**——本沙箱无 GUI/显示，Electron 运行时未注册内置 `electron` 模块（`require('electron')` 返回路径字符串而非 API），属环境限制，非代码缺陷。
-- 提交：`B.1 Electron shell scaffold: main process + renderer placeholder (Diverge OK)`（`c54db8c`）
+- 提交：`B.1 Electron shell scaffold: main process + renderer placeholder (IdeaSprout OK)`（`c54db8c`）
 
 **B.2 存储层：JSON 文件存储初始化** ✅（代码完成，待提交 B.2/B.3）
 - 目标：应用启动后建立本地 JSON 存储目录与数据模型（替代 SQLite）。
@@ -132,7 +132,7 @@
 - 动作：
   - `src/core/mcp/McpClientManager.ts`：用 `StdioClientTransport`（`@modelcontextprotocol/sdk/client/stdio.js`）拉起 MCP Server 子进程，维护 `id → Client`，提供 `connect / listTools / callTool / disconnect / disconnectAll`（`callTool` 拼接文本片段、`isError` 抛错）。
   - `src/core/mcp/McpAdapter.ts`：实现 `Generator`（`kind:'mcp'`），把某 Server 的某个 tool 包装成统一生成器（`generate(spec)` → `callTool` → `NodeContent`）。
-  - 示例 Server 增加测试钩子 `DIVERGE_MCP_FAKE=1`（子进程用确定性假生成器，避免联网）。
+  - 示例 Server 增加测试钩子 `IDEASPROUT_MCP_FAKE=1`（子进程用确定性假生成器，避免联网）。
 - 验证：`tests/mcp-manager.test.cjs` 真实 spawn 子进程 MCP Server，**4 断言全过**：子进程暴露 `generate`；`listTools` 带 description；`McpAdapter.generate()` 经真实子进程返回文本 + contentType；`disconnectAll` 关闭连接。
 - 提交：`step B.7 mcp client manager + adapter`
 
@@ -158,23 +158,23 @@
 **C.3 生成对话框 + IPC 打通 ✅**
 - 目标：选后端 + 提示词 → 经主进程生成 → 落库 → 节点显示。
 - 动作（已落地）：
-  - 共享契约 `src/shared/ipc.ts`：频道名 `IPC`、`GeneratorInfo` / `GenerateNodeRequest` / `GenerateNodeResult` / `DivergeApi`。
-  - 主进程：`main/ipc/handlers.ts`（`listGenerators` / `ensureProject` / `generateNode` 三个 handler）、`main/preload.ts`（`contextBridge` 暴露 `window.diverge`，不暴露 ipcRenderer 本体）、`main/app.ts`（`bootstrap()` 装配服务→handler→窗口，`main.ts` 只调用它）。
+  - 共享契约 `src/shared/ipc.ts`：频道名 `IPC`、`GeneratorInfo` / `GenerateNodeRequest` / `GenerateNodeResult` / `IdeaSproutApi`。
+  - 主进程：`main/ipc/handlers.ts`（`listGenerators` / `ensureProject` / `generateNode` 三个 handler）、`main/preload.ts`（`contextBridge` 暴露 `window.ideasprout`，不暴露 ipcRenderer 本体）、`main/app.ts`（`bootstrap()` 装配服务→handler→窗口，`main.ts` 只调用它）。
   - 核心逻辑抽成纯函数 `src/core/generate-node.ts`（可 Node 单测）；`core/services.ts` 组装仓储 + 生成器注册表，无 DeepSeek key 时用 `createFakeGenerator` 兜底。
   - 渲染端：`store/treeStore.ts` 增加 `init()`（拉项目+生成器）、`openDialog/closeDialog/generate()`；新增 `dialogs/GenerateDialog.tsx`；`App.tsx` 加顶栏「＋ 新增想法」；`PreviewPanel` 加「从这里发散」。
-- 关键坑（已解决）：**Electron 默认 `sandbox: true` 会禁止 preload 做相对路径 require**（只允许 `require('electron')`），导致 `require('../shared/ipc')` 报 `module not found`、`window.diverge` 永不注入。已在 `app.ts` 设 `sandbox: false`（保留 `contextIsolation` + `nodeIntegration:false`），换来 preload 直接复用 `shared/ipc` 契约。**渲染端有无主进程都能工作**，所以这次故障表现为"静默降级"而非报错——正是探针读 `Object.keys(window.diverge)` 才抓到。
+- 关键坑（已解决）：**Electron 默认 `sandbox: true` 会禁止 preload 做相对路径 require**（只允许 `require('electron')`），导致 `require('../shared/ipc')` 报 `module not found`、`window.ideasprout` 永不注入。已在 `app.ts` 设 `sandbox: false`（保留 `contextIsolation` + `nodeIntegration:false`），换来 preload 直接复用 `shared/ipc` 契约。**渲染端有无主进程都能工作**，所以这次故障表现为"静默降级"而非报错——正是探针读 `Object.keys(window.ideasprout)` 才抓到。
 - 另修：新增节点后自动 `fitView`，避免新节点落在视口外（初次 `fitView` 只覆盖初始节点）。
 - 验证：
   - `tests/generate-node.test.cjs` **10 断言**（生成/落库/父上下文推断/显式上下文优先/根层无边/label 截断/未知生成器报错）。
-  - **端到端探针**（Electron 跑生产 `bootstrap()`，假生成器）**26 断言全过**：`window.diverge` 注入 → 初始 1 节点 → 打开对话框 → 选生成器 → 输入 → 生成 → 画布 2 节点 → 预览显示内容 → 磁盘文件为真；再从选中节点「从这里发散」→ 3 节点 + 1 边 → 子节点内容含"基于父节点" → 磁盘 parentId/edge 正确；并截图确认。
-- 说明：真实 DeepSeek 调用需 key + 联网，沙箱内用假生成器验证链路本身；`DIVERGE_FAKE_GENERATOR=1` 即启用兜底生成器。
+  - **端到端探针**（Electron 跑生产 `bootstrap()`，假生成器）**26 断言全过**：`window.ideasprout` 注入 → 初始 1 节点 → 打开对话框 → 选生成器 → 输入 → 生成 → 画布 2 节点 → 预览显示内容 → 磁盘文件为真；再从选中节点「从这里发散」→ 3 节点 + 1 边 → 子节点内容含"基于父节点" → 磁盘 parentId/edge 正确；并截图确认。
+- 说明：真实 DeepSeek 调用需 key + 联网，沙箱内用假生成器验证链路本身；`IDEASPROUT_FAKE_GENERATOR=1` 即启用兜底生成器。
 - 提交：`step C.3 generate dialog + ipc end-to-end`
 
 - **C.4 已完成（待提交）**：`contentType` 贯通领域模型 + `previews/`（SandboxFrame / MarkdownView / ContentPreview）+ 对话框内容类型下拉 + Markdown 排版。端到端探针 **21 断言**全过（含真 XSS 载荷被沙箱挡住）。
 - **C.5 已完成（待提交）**：版本模型（`versions[]` + `currentVersionId`，旧版永不删）+ `addVersion`/`setCurrentVersion` + 批量发散（`count` ≤5、并发 ≤2、局部失败可容忍）+ 右键菜单 + 版本历史面板。单测 **storage 13 + generate-node 20**；E2E **3 个探针 81 断言**全过。**累计 5 个单测套件 44 断言 + 3 个 E2E 探针 81 断言。**
 - **C.6 已完成（待提交）**：AI 后端管理 UI（DeepSeek key + MCP server 增删启停）+ `SecretBox`（safeStorage 加密，降级明文时界面警示）+ 注册表热重建。单测新增 `ai-settings.test.cjs` **17 断言**（含真实 MCP 子进程握手与生成）；E2E 新增 `probe-c6.cjs` **24 断言**。**累计 6 个单测套件 61 断言 + 4 个 E2E 探针 105 断言全过。**
 - **D.1 已完成（待提交）**：导出（Markdown / 单文件 HTML）× 两种范围（完整发散树 / 根→选中节点收敛路径）。`core/export.ts` 纯函数 + `renderer/export/standaloneHtml.tsx`（复用预览组件，react-dom/server 静态渲染）。单测新增 `export.test.cjs` **10 断言**；E2E 新增 `probe-d1.cjs` **40 断言**（含"导出物用独立窗口打开后正确渲染"）。**累计 7 个单测套件 71 断言 + 5 个 E2E 探针 145 断言全过。**
-- **D.2 已完成（待提交）**：Windows 打包（electron-builder + NSIS）。`electron-builder.yml` + `scripts/make-icon.cjs`（Node 手写 PNG/ICO，无图像库）+ `scripts/dist.cjs`（默认 npmmirror 镜像）+ `package.json` 脚本。**实测产出 `Diverge-0.1.0-win-x64-setup.exe`（81 MB）**，并直接启动 `win-unpacked` 里的 exe 验证打包后链路可用。**阶段 D 完成，同时意味着基础功能全部完成。**
+- **D.2 已完成（待提交）**：Windows 打包（electron-builder + NSIS）。`electron-builder.yml` + `scripts/make-icon.cjs`（Node 手写 PNG/ICO，无图像库）+ `scripts/dist.cjs`（默认 npmmirror 镜像）+ `package.json` 脚本。**实测产出 `IdeaSprout-0.1.0-win-x64-setup.exe`（81 MB）**，并直接启动 `win-unpacked` 里的 exe 验证打包后链路可用。**阶段 D 完成，同时意味着基础功能全部完成。**
 
 **C.4 多类型预览 ✅**
 - 目标：HTML / Markdown / SVG 各自正确渲染。
@@ -184,7 +184,7 @@
   - `previews/MarkdownView.tsx`：`react-markdown@9.1.0`（**不开 rehype-raw**，内嵌 HTML 只当纯文本，无 XSS 面）。
   - `previews/ContentPreview.tsx`：按 `contentType` 分发（markdown / html / svg / text / image 占位）。
   - `GenerateDialog` 增加**内容类型**下拉（Markdown / 纯文本 / HTML / SVG）——否则 HTML/SVG 预览在 UI 上不可达。
-  - 假生成器按类型产出对应形态内容（markdown 标题+列表 / html 文档 / svg 图形 / 纯文本），并加 `DIVERGE_FAKE_ECHO=1` 钩子：prompt **不转义**直接嵌进模板，用于真载荷安全性测试。
+  - 假生成器按类型产出对应形态内容（markdown 标题+列表 / html 文档 / svg 图形 / 纯文本），并加 `IDEASPROUT_FAKE_ECHO=1` 钩子：prompt **不转义**直接嵌进模板，用于真载荷安全性测试。
   - `styles.css` 补 Markdown 排版。
 - ⚠️ **重要发现**：宿主页是 `file://` 时，Chromium **仍允许父页读取沙箱 iframe 的 `contentDocument`**，所以 `contentDocument === null` **不能**作为隔离判据（实测 `contentWindow.origin === "null"` 才是）。判隔离要用 `contentWindow.origin`。
 - 验证：**端到端探针 21 断言全过**（Electron 跑生产 `bootstrap()`）：
@@ -212,7 +212,7 @@
   - **端到端探针 `probe-c5.cjs` 34 断言全过**：右键节点 → 菜单出现且带 label → 点「发散子节点…」→ 对话框带父上下文 → 一次发散 3 条 → 画布 4 节点 3 边 → 面板显示 v1 → 「重新生成」→ 版本历史 2 条、当前变 v2、内容确实变新 → 已版本节点的菜单预告 `v3` → 「翻案」→ 当前回 v1、内容逐字回退、**版本数不变** → 磁盘 `versions/currentVersionId/content` 一致、兄弟节点坐标阶梯正确。
   - 回归：C.3/C.4 探针同样全过（**26 + 21 + 34 = 81 项 E2E 断言**），5 个单测套件 **44 断言**，typecheck + build:main + vite build 全绿。
 - 坑（自身踩到）：markdown 预览**不解析内嵌 HTML**（安全取舍），所以占位生成器里用 `<sub>` 标版本号会原样显示成乱码 → 改用 markdown 原生 `*斜体*`。
-- 提交：`step C.5 diverge/converge interaction`
+- 提交：`step C.5 ideasprout/converge interaction`
 
 **C.6 AI 后端管理 UI**
 - 目标：可视化配置 DeepSeek key、添加/启停 MCP server，并联动 `GeneratorRegistry`。
@@ -250,7 +250,7 @@
   - `scripts/dist.cjs`：electron-builder 包装器，默认套 **npmmirror** 镜像（`ELECTRON_MIRROR` / `ELECTRON_BUILDER_BINARIES_MIRROR`），用户已设则尊重用户设置。
   - `package.json`：`build`（全量打包）/ `dist:dir`（只出免安装目录，便于快速自测）/ `icon` / `build:renderer`。
 - ⚠️ 必须避开的坑：**vite 的产物在 `dist/renderer`，而 electron-builder 默认输出目录也叫 `dist`** → 会互相覆盖。已把输出改到 `release/`。
-- 验证（本机实测）：`--win nsis` **成功产出** `release/Diverge-0.1.0-win-x64-setup.exe`（81 MB）+ `.blockmap` + `latest.yml`；`app.asar`（21.5 MB）内含 `dist-electron/main/main.js`、`preload.js`、`dist/renderer/index.html` 与全部运行时依赖（含 `@modelcontextprotocol/sdk`、`zod`）。**最有力的一条**：直接启动 `release/win-unpacked/发散创意画布.exe`（指向临时数据目录），主进程启动 → 从 asar 载入渲染页 → 渲染端经 IPC 调 `ensureProject()` → 磁盘上出现项目 JSON（`我的创意` + 根节点 `创意主题`）——证明打包后的"主进程 + preload + 渲染端 + IPC + JSON 存储"整条链路可用。
+- 验证（本机实测）：`--win nsis` **成功产出** `release/IdeaSprout-0.1.0-win-x64-setup.exe`（81 MB）+ `.blockmap` + `latest.yml`；`app.asar`（21.5 MB）内含 `dist-electron/main/main.js`、`preload.js`、`dist/renderer/index.html` 与全部运行时依赖（含 `@modelcontextprotocol/sdk`、`zod`）。**最有力的一条**：直接启动 `release/win-unpacked/风衍 IdeaSprout.exe`（指向临时数据目录），主进程启动 → 从 asar 载入渲染页 → 渲染端经 IPC 调 `ensureProject()` → 磁盘上出现项目 JSON（`我的创意` + 根节点 `创意主题`）——证明打包后的"主进程 + preload + 渲染端 + IPC + JSON 存储"整条链路可用。
 - 环境限制（本机网络/权限，非配置问题）：
   - `github.com` 被代理挡（502）→ 用 npmmirror 解决（Electron 111 MB 11 秒下完）。
   - `winCodeSign` 解压需**创建符号链接特权**（其内含 macOS 的 `libcrypto.dylib`/`libssl.dylib` 软链），本机没有开发者模式/管理员 → 报 `客户端没有所需的特权`。**只影响给 exe 打图标**，其余（NSIS 生成安装包）全部正常。因此本机验证时用 `-c.win.signAndEditExecutable=false`；正式出包请开启开发者模式或管理员运行，以保留图标与版本信息。
@@ -262,7 +262,7 @@
   - `store/treeStore.ts`：新增 `previewWidth` + `setPreviewWidth` / `resetPreviewWidth`，并导出 `PREVIEW_WIDTH_MIN=260` / `PREVIEW_WIDTH_MAX=960` / `PREVIEW_WIDTH_DEFAULT=340`、`clampPreviewWidth()`。上限取 `min(960, innerWidth - 360)` —— **保证画布不会被挤没**。
   - `panels/PreviewPanel.tsx`：左边缘加拖拽把手（`cursor: col-resize`，悬停/拖动高亮），**双击复位**默认宽度。拖拽用 `mousedown` + window 上的 `mousemove/mouseup`（拖出面板范围也跟手），并按 1:1 位移换算宽度。
   - ⚠️ 结构性坑：把手若直接放在 `overflowY:auto` 的容器里，**滚动内容时会把把手一起滚走**。已改为"面板 `overflow:hidden` + 内层滚动区 `preview-scroll`"，把手作为面板的直接子节点绝对定位 → 永久贴左边缘。
-  - 宽度**best-effort 持久化**到 `localStorage`（`diverge.previewWidth`，读写均 try/catch）。纯浏览器预览/`file://` 下不可用时静默回落默认值，不影响本次会话内拖拽。
+  - 宽度**best-effort 持久化**到 `localStorage`（`ideasprout.previewWidth`，读写均 try/catch）。纯浏览器预览/`file://` 下不可用时静默回落默认值，不影响本次会话内拖拽。
 - 验证：E2E `probe-d3.cjs` **12 断言**，用**真实鼠标事件**（`webContents.sendInputEvent` 的 mousedown/mousemove/mouseup，而非 JS 改 state）拖动把手：
   - 结构类：把手存在、是面板直接子节点且**不在滚动区内**、滚动区 `overflowY:auto` 且面板 `overflow:hidden`、光标 `col-resize`；
   - 行为类：**向右拖到底夹紧到 MIN(260)** → **从 MIN 左移 100px 得 360（证明 1:1 位移）** → DOM 宽度与 store `data-width` 一致 → **向左拖到底夹紧到 MAX(906=innerWidth-360)** 且画布宽度仍 > 0 → **双击复位 340** → 宽度已写入 `localStorage`。
@@ -332,9 +332,9 @@
   - E2E：新增 `probe-d7.cjs`（**30 断言**）——卡片标题 ≠ 用户输入那句、可行性百分比与档位、三组要点条数与落库一致、**Handle 与连线未丢**、预览面板完整版与原始描述、重生成换版、翻案整版回退、截图留档（`ui-15-idea-node*.png`）。
   - 全量回归：**2 项 typecheck + 8 个单测 + 11 个 E2E 探针**全绿；`probe-d7` 连跑 2 轮 **30/30** 稳定。
   - ⚠️ 本次探针自身修掉的两个坑（**属探针缺陷，非产品问题**）：
-    1. 新探针最初漏点 `[data-testid="menu-diverge"]` 就直接找输入框 → 渲染端抛错，但老版 `finish()` 把 `0/0` 判成绿（假绿灯）。已给 `finish()` 加**"零断言即失败"**守卫。
+    1. 新探针最初漏点 `[data-testid="menu-ideasprout"]` 就直接找输入框 → 渲染端抛错，但老版 `finish()` 把 `0/0` 判成绿（假绿灯）。已给 `finish()` 加**"零断言即失败"**守卫。
     2. 卡片标题若用 `innerText` 读取，会在**节点刚插入、尚未排版**的一瞬间返回空串（`innerText` 依赖布局）。已改用 `textContent`（不依赖布局）+ 轮询等待，消除该闪断。
-- 提交：`step D.7 child nodes show diverged title + feasibility/pros/cons/risks`
+- 提交：`step D.7 child nodes show ideasproutd title + feasibility/pros/cons/risks`
 
 **D.8 MCP 只读工具：让外部客户端能"读"画布**
 - 诉求（用户提出）：原先 MCP 只有 `generate` 一个工具，是**写**（生成）能力 —— 外部客户端（如 WorkBuddy）挂上这个 MCP 只能"让画布生成内容"，**读不到**画布上的节点。要让外部能读。
@@ -344,18 +344,18 @@
     1. **绝不写** —— **不复用 `JsonStore`**：它的构造函数会 `mkdirSync` 建目录，对只读服务是多余的写副作用（数据目录不存在时还会凭空造出空目录）。id 消毒则复用 `store.ts` 新导出的 `sanitizeProjectId`（**单一事实源**，避免写入方/读取方对"同一 id 对应哪个文件"的理解分叉）。
     2. **绝不抛到进程外** —— 坏文件/非 json 文件跳过，目录不存在返回空，由上层转 isError 文本，不让子进程崩掉。
     3. **绝不依赖 Electron** —— 只跑在 `ELECTRON_RUN_AS_NODE` 退化的纯 Node 环境里，只用 fs/path/process。
-  - **数据目录怎么找**：① `DIVERGE_DATA_DIR`（显式，最优先）；② 兜底按平台扫标准 userData 路径 × 应用名候选（`发散创意画布` / `diverge-desktop`）。
+  - **数据目录怎么找**：① `IDEASPROUT_DATA_DIR`（显式，最优先）；② 兜底按平台扫标准 userData 路径 × 应用名候选（`风衍 IdeaSprout` / `ideasprout-desktop`）。
   - **三个只读 tool**（`workbuddy-mcp-server.ts`）：`list_projects()`（id/名称/节点数/更新时间，按更新时间倒序）、`get_tree({projectId, includeContent?})`、`get_node({projectId, nodeId})`（单节点**全量**含所有历史版本）。`projectId` 支持传**项目名**（调用方常常只知道名字）。`get_tree` **默认不带正文**——一棵树可能几十个节点、每个节点又有多版正文，全带上会瞬间吃满调用方上下文。
 - ⚠️ **三个必须避开的坑（都踩过）**：
-  1. **`DIVERGE_DATA_DIR` 必须由主进程显式注入**：MCP SDK 的 `StdioClientTransport` 只继承一份**安全白名单**环境变量（`client/stdio.js` 的 `DEFAULT_INHERITED_ENV_VARS`，Windows 上是 `APPDATA/PATH/TEMP...`），`DIVERGE_DATA_DIR` **不在白名单**里，不注入就传不过来、只读 tool 一律报"找不到数据目录"。已在 `main/app.ts` 的 `exampleMcpServer.env` 里补上。
+  1. **`IDEASPROUT_DATA_DIR` 必须由主进程显式注入**：MCP SDK 的 `StdioClientTransport` 只继承一份**安全白名单**环境变量（`client/stdio.js` 的 `DEFAULT_INHERITED_ENV_VARS`，Windows 上是 `APPDATA/PATH/TEMP...`），`IDEASPROUT_DATA_DIR` **不在白名单**里，不注入就传不过来、只读 tool 一律报"找不到数据目录"。已在 `main/app.ts` 的 `exampleMcpServer.env` 里补上。
   2. **只读 tool 会被误当成"生成后端"**：`core/ai-backends.ts` 原本是"**每个 tool 都注册成一个生成器**"，加完三个只读 tool 后，生成器下拉会多出 3 个"选了必然报错"的项（入参契约与 `generate` 完全不同）。修法用 MCP **标准做法**：三个只读 tool 都打 `annotations: { readOnlyHint: true }`，`McpClientManager.listTools` 把它映射成 `McpToolInfo.readOnly`，`ai-backends` 装配时 `if (tool.readOnly) continue`。这样对**第三方** server 的只读工具同样成立，而不是硬编码名字黑名单。
   3. **`ai-settings.test.cjs` 的 `deepStrictEqual(tools, ['generate'])` 会被这次改动正当打破**（工具集合从 1 个变成 4 个）→ 已改为断言 4 个工具并按 `readOnly` 验证"只注册生成工具"。
 - 验证（全绿）：
   - 新增 `tests/project-reader.test.cjs`（**10 断言**）：坏文件/非 json 文件不拖垮列表、按更新时间倒序、`includeContent` 默认关闭、传项目名可命中、`getNode` 带历史版本、**文件名与 `project.id` 对不上时靠扫描兜底**、**路径穿越被消毒挡住**、目录不存在返回空、`resolveProjectsDir` 优先级与"无候选返回 null"。
-  - `tests/mcp-server.test.cjs` 扩到 **7 断言**（InMemoryTransport 进程内）：4 个 tool 全在、只读 tool **真的读到磁盘画布 JSON**（含"用项目名定位"）、未知项目 → isError、数据目录无法定位 → 带 `DIVERGE_DATA_DIR` 指引的 isError。
+  - `tests/mcp-server.test.cjs` 扩到 **7 断言**（InMemoryTransport 进程内）：4 个 tool 全在、只读 tool **真的读到磁盘画布 JSON**（含"用项目名定位"）、未知项目 → isError、数据目录无法定位 → 带 `IDEASPROUT_DATA_DIR` 指引的 isError。
   - `tests/mcp-manager.test.cjs` 扩到 **6 断言**（**真实 spawn 子进程**）：`readOnlyHint` 能穿过真实 SDK 往返（`generate=false`、3 个只读=`true`）、只读 tool 经真实子进程读到画布 JSON。
   - `tests/ai-settings.test.cjs` 扩到 **17 断言**：示例 server 连通后恰好发现 4 个 tool，但**只注册了 1 个 MCP 生成器**（`generatorCount === 2`），3 个只读 tool 在注册表里不存在。
-  - E2E `probe-c6.cjs` 加了界面侧断言：4 个 tool 都列在面板上、**生成器下拉里没有只读 tool**、`settings.json` 里示例 server 的 `env` 确实带上了 `DIVERGE_DATA_DIR`。
+  - E2E `probe-c6.cjs` 加了界面侧断言：4 个 tool 都列在面板上、**生成器下拉里没有只读 tool**、`settings.json` 里示例 server 的 `env` 确实带上了 `IDEASPROUT_DATA_DIR`。
   - 全量回归：**2 项 typecheck + 9 个单测 + 11 个 E2E 探针**全绿。
 - 提交：`step D.8 MCP read-only tools (list_projects + get_tree + get_node)`
 
@@ -408,7 +408,7 @@
 | 类型 | 方法 |
 |---|---|
 | 启动类（B.1/C） | 运行 `npm run dev`（tsc 编主进程 → vite 起 5173 → electron 等端口后 loadURL），肉眼确认窗口/画布现象 |
-| 存储类（B.2/B.3） | 检查 `userData/diverge/projects/<id>.json`（JSON 存储，非 SQLite）；`tests/storage.test.cjs` |
+| 存储类（B.2/B.3） | 检查 `userData/ideasprout/projects/<id>.json`（JSON 存储，非 SQLite）；`tests/storage.test.cjs` |
 | 纯类型/纯函数（B.4/D.1/D.7/D.9） | `tsc --noEmit` 通过 + `tests/*.test.cjs`（编译到 `dist-test` 后跑） |
 | AI 类（B.5/B.6/B.7/D.7/D.8） | Node 测试内 mock fetch / 起子进程调 `generate`，断言返回文本与结构化 JSON 解析；MCP 侧断言 `listTools`/`callTool` 与 `annotations.readOnlyHint` 往返（真实子进程） |
 | 交互类（C.3/C.5/C.6/D.1/D.3/D.7/D.9） | Electron 探针：清 `ELECTRON_RUN_AS_NODE` → 加载构建产物 → `executeJavaScript` 读 DOM/计算样式 + `sendInputEvent`/`dispatchEvent` 交互 + `capturePage` 截图。⚠️ 断言"节点/边数量"这类异步渲染结果**必须轮询等待**（`waitFor`），固定 sleep 会偶发失败（边比节点晚一帧）；取文本用 `textContent` 而非 `innerText`（后者依赖布局，节点刚插入时可能瞬间为空）；探针收尾须为"零断言即失败"（否则渲染端抛错会被误报成 `0/0 OK`）。**交互方式变更时，要断言"旧的一键行为已不再成立"**——D.9 把"点一下直出"改成"先进编辑态"，只断言最终版本数会让老行为静默通过 |
@@ -427,7 +427,7 @@
 - **Shell 环境异常**：本机 WorkBuddy 的 bash shim 缺 `dirname`/`cd`/`cat`/`tail` 等基础命令，管道与文本汇总不可靠；git/文件操作统一用 Python（绝对路径）或 node 直接调用。
 - **`node_modules/@types` 的隐式纳入陷阱**：TS 会**自动**把 `node_modules/@types/*` 全部当成全局类型库；本机 `node_modules` 是"不完整 npm 拷贝"混合体，若其中出现残缺 `@types`（如 `@types/glob` 缺 `index.d.ts`），会以 `TS2688` **打断整个类型检查**。对策：①三个 tsconfig 均显式 `"types": ["node"]`（不依赖隐式纳入）；②从 `.pnpm` 补包时**跳过 `@types/*`**。
 - **每步可回退**：任一步失败立即停，汇报；必要时 `git revert <step-commit>` 回到上一步干净态。
-- **密钥安全**：DeepSeek key 经 Electron `safeStorage` 加密后存 `<userData>/diverge/settings.json`，**绝不落明文、绝不进仓库**（系统无加密后端时才降级明文，且界面会明确警示）。`.gitignore` 已屏蔽 `.env` 等。
+- **密钥安全**：DeepSeek key 经 Electron `safeStorage` 加密后存 `<userData>/ideasprout/settings.json`，**绝不落明文、绝不进仓库**（系统无加密后端时才降级明文，且界面会明确警示）。`.gitignore` 已屏蔽 `.env` 等。
 
 ---
 
@@ -437,14 +437,14 @@
 
 ## 6. 变更记录（决策偏离）
 
-- **2026-09-20 · 存储引擎调整**：原计划 B.2/B.3 使用 `better-sqlite3`（SQLite 文件）。实测发现：(1) 本机 `pnpm` 因 Windows 符号链接权限失败（已统一改用 `npm`）；(2) `better-sqlite3` 原生二进制未构建成功，且其在 Electron 中需针对 Electron 的 Node ABI 重编译（沙箱屏蔽相关构建工具，无法稳定完成）。**改为纯 JS 的 JSON 文件存储**（每个项目一个 `userData/diverge/projects/<id>.json`），零原生依赖、绝对可靠、天然可导出。数据模型（project/tree/node/edge）不变。详见方案文档对应变更。
+- **2026-09-20 · 存储引擎调整**：原计划 B.2/B.3 使用 `better-sqlite3`（SQLite 文件）。实测发现：(1) 本机 `pnpm` 因 Windows 符号链接权限失败（已统一改用 `npm`）；(2) `better-sqlite3` 原生二进制未构建成功，且其在 Electron 中需针对 Electron 的 Node ABI 重编译（沙箱屏蔽相关构建工具，无法稳定完成）。**改为纯 JS 的 JSON 文件存储**（每个项目一个 `userData/ideasprout/projects/<id>.json`），零原生依赖、绝对可靠、天然可导出。数据模型（project/tree/node/edge）不变。详见方案文档对应变更。
 - **A.2 已完成并提交**（commit `98fd27c`）：依赖树现为纯 JS（react / @xyflow/react / zustand / @modelcontextprotocol/sdk / react-markdown / electron / vite / typescript / electron-builder / concurrently），无 `.node` 原生模块残留。
 - **B.1 已完成并提交**（commit `c54db8c`）：Electron 主进程 + 渲染占位页代码完成；`tsc` 类型检查与 `build:main` 编译均已验证通过。窗口弹出验证因沙箱无 GUI 暂缓，需在用户 Windows 真机 `npm run dev` 最终确认（`require('electron')` 在沙箱内不返回 API 的环境限制）。
 - **B.2 / B.3 已完成（待提交）**：JSON 存储层（`JsonStore` + `ProjectRepository` + 共享类型 `src/shared/types.ts`）落地，`tests/storage.test.cjs` 11 项断言全过。新增 `tsconfig.test.json`（编译 `src/core`+`src/shared` 至 `dist-test` 供 Node 测试）、`tests/storage.test.cjs`；`.gitignore` 增加 `dist-test/`；`tsconfig.main.json` 的 `include` 扩展为 `["src/main","src/core","src/shared"]` 以便主进程直接编译存储层。
 - **B.4 已完成（待提交）**：`src/core/generator/types.ts` 定义统一 `Generator` 接口与 `GeneratorRegistry`，为 B.5（DeepSeek 直连）与 B.7（MCP adapter）提供适配接缝；`tsc` 编译通过。
 - **B.5 已完成（待提交）**：`src/core/generator/direct/deepseek.ts`（`DeepSeekGenerator`）实现 `Generator`，`fetch` 直连 `/v1/chat/completions`，apiKey 注入式；`tests/deepseek.test.cjs`（mock fetch）4 断言全过。
 - **B.6 已完成（待提交）**：示例 MCP Server（`McpServer` + `generate` tool + `startStdioServer`），`tests/mcp-server.test.cjs`（InMemoryTransport 端到端）3 断言全过。
-- **B.7 已完成（待提交）**：`src/core/mcp/McpClientManager.ts`（`StdioClientTransport` 拉子进程）+ `src/core/mcp/McpAdapter.ts`（tool → `Generator`，`kind:'mcp'`）；示例 Server 增 `DIVERGE_MCP_FAKE` 测试钩子；`tests/mcp-manager.test.cjs`（真实子进程）4 断言全过。**至此阶段 B 全部完成，累计 22 项断言全过。**
+- **B.7 已完成（待提交）**：`src/core/mcp/McpClientManager.ts`（`StdioClientTransport` 拉子进程）+ `src/core/mcp/McpAdapter.ts`（tool → `Generator`，`kind:'mcp'`）；示例 Server 增 `IDEASPROUT_MCP_FAKE` 测试钩子；`tests/mcp-manager.test.cjs`（真实子进程）4 断言全过。**至此阶段 B 全部完成，累计 22 项断言全过。**
 - **C.1 已完成（待提交）**：画布基础渲染（`CreativeTree` + `ReactFlowProvider` + 全局样式）。`tsc` + `vite build` 均通过，并已用 Electron 截图实测（3 节点 + 2 连线）。
 - **C.2 已完成（待提交）**：Zustand `treeStore`（节点/边/选中态，画布由 store 驱动）+ `PreviewPanel`（右侧面板）；`tsc` + `vite build` 通过；**Electron 真实鼠标点击验证**（点击前提示 → 点击「方向 A」后面板显示其内容）。
 - **C.3 已完成（待提交）**：`shared/ipc.ts` 契约 + 主进程 IPC handlers/preload/`app.ts(bootstrap)` + `core/generate-node.ts` + 渲染端 `GenerateDialog` 与 store 接线。`tests/generate-node.test.cjs` **10 断言**、Electron 生产路径端到端探针 **26 断言**全过。**累计 5 个测试套件 32 项断言全过**（storage 11 + deepseek 4 + mcp-server 3 + mcp-manager 4 + generate-node 10）。

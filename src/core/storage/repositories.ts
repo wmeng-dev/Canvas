@@ -182,7 +182,7 @@ export class ProjectRepository {
    */
   importExternal(file: ProjectFile): ProjectFile {
     if (!file || typeof file !== 'object' || !file.project || !Array.isArray(file.tree?.nodes)) {
-      throw new Error('不是有效的 Diverge 项目文件')
+      throw new Error('不是有效的 IdeaSprout 项目文件')
     }
     if (!file.project.id) file.project.id = randomUUID()
     this.store.write(file.project.id, file)

@@ -62,7 +62,7 @@ export function App() {
             flex: '0 0 auto',
           }}
         >
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#e6edf3' }}>发散创意画布</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#e6edf3' }}>风衍 IdeaSprout</span>
           {savedLabel && (
             <span data-testid="saved-hint" style={{ fontSize: 12, color: '#3fb950' }}>
               {savedLabel}

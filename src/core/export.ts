@@ -206,7 +206,7 @@ export function renderMarkdown(doc: ExportDoc): string {
 const ILLEGAL = /[\\/:*?"<>|\u0000-\u001f]/g
 
 export function suggestedFileName(doc: ExportDoc, format: ExportFormat): string {
-  const base = doc.projectName.replace(ILLEGAL, '_').replace(/\s+/g, ' ').trim() || '发散创意画布'
+  const base = doc.projectName.replace(ILLEGAL, '_').replace(/\s+/g, ' ').trim() || '风衍'
   const stamp = doc.exportedAt.slice(0, 10)
   const scopeTag = doc.scope === 'path' ? '_收敛路径' : ''
   const ext = format === 'html' ? 'html' : 'md'

@@ -1,5 +1,5 @@
 // C.3/C.5 跨进程 IPC 契约：主进程 handler / preload / 渲染端 共用同一套类型与频道名。
-// 渲染端通过 window.diverge 访问（见 preload.ts）。
+// 渲染端通过 window.ideasprout 访问（见 preload.ts）。
 
 import type {
   CommentThread,
@@ -12,46 +12,46 @@ import type {
 import type { AiSettingsView } from './settings'
 
 export const IPC = {
-  listGenerators: 'diverge:listGenerators',
-  ensureProject: 'diverge:ensureProject',
+  listGenerators: 'ideasprout:listGenerators',
+  ensureProject: 'ideasprout:ensureProject',
   /** 重命名当前项目（仅改 project.name，便于在库里识别） */
-  renameProject: 'diverge:renameProject',
+  renameProject: 'ideasprout:renameProject',
   /** 显式"保存"：把当前项目重新落盘（自动保存已在每次变更时发生，这里是主动确认/刷新） */
-  saveProject: 'diverge:saveProject',
+  saveProject: 'ideasprout:saveProject',
   /** "另存为"：导出一份完整项目文件（ProjectFile）到用户选定的路径 */
-  saveProjectAs: 'diverge:saveProjectAs',
+  saveProjectAs: 'ideasprout:saveProjectAs',
   /** "打开"：从用户选定的 .json 导入一个项目文件 */
-  openProject: 'diverge:openProject',
+  openProject: 'ideasprout:openProject',
   // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------
-  addNodeComment: 'diverge:addNodeComment',
-  addCanvasComment: 'diverge:addCanvasComment',
-  updateCommentBody: 'diverge:updateCommentBody',
-  removeComment: 'diverge:removeComment',
-  updateCommentPosition: 'diverge:updateCommentPosition',
-  generateNode: 'diverge:generateNode',
-  generateProposal: 'diverge:generateProposal',
-  regenerateNode: 'diverge:regenerateNode',
-  updateNodePrompt: 'diverge:updateNodePrompt',
-  setNodeVersion: 'diverge:setNodeVersion',
-  setNodeCollapsed: 'diverge:setNodeCollapsed',
-  setNodeArchived: 'diverge:setNodeArchived',
-  setNodeColor: 'diverge:setNodeColor',
-  listProjects: 'diverge:listProjects',
-  createProject: 'diverge:createProject',
-  switchProject: 'diverge:switchProject',
+  addNodeComment: 'ideasprout:addNodeComment',
+  addCanvasComment: 'ideasprout:addCanvasComment',
+  updateCommentBody: 'ideasprout:updateCommentBody',
+  removeComment: 'ideasprout:removeComment',
+  updateCommentPosition: 'ideasprout:updateCommentPosition',
+  generateNode: 'ideasprout:generateNode',
+  generateProposal: 'ideasprout:generateProposal',
+  regenerateNode: 'ideasprout:regenerateNode',
+  updateNodePrompt: 'ideasprout:updateNodePrompt',
+  setNodeVersion: 'ideasprout:setNodeVersion',
+  setNodeCollapsed: 'ideasprout:setNodeCollapsed',
+  setNodeArchived: 'ideasprout:setNodeArchived',
+  setNodeColor: 'ideasprout:setNodeColor',
+  listProjects: 'ideasprout:listProjects',
+  createProject: 'ideasprout:createProject',
+  switchProject: 'ideasprout:switchProject',
   /** 关闭画布 tab（**不删数据**）：只是从 tab 条移除，可再从"已关闭"恢复 */
-  closeProject: 'diverge:closeProject',
+  closeProject: 'ideasprout:closeProject',
   /** 重新打开一张已关闭的画布 */
-  reopenProject: 'diverge:reopenProject',
+  reopenProject: 'ideasprout:reopenProject',
   /** 已关闭的画布列表（供"已关闭"菜单展示） */
-  listClosedProjects: 'diverge:listClosedProjects',
-  getAiSettings: 'diverge:getAiSettings',
-  setDeepSeekKey: 'diverge:setDeepSeekKey',
-  clearDeepSeekKey: 'diverge:clearDeepSeekKey',
-  addMcpServer: 'diverge:addMcpServer',
-  removeMcpServer: 'diverge:removeMcpServer',
-  setMcpServerEnabled: 'diverge:setMcpServerEnabled',
-  saveExport: 'diverge:saveExport',
+  listClosedProjects: 'ideasprout:listClosedProjects',
+  getAiSettings: 'ideasprout:getAiSettings',
+  setDeepSeekKey: 'ideasprout:setDeepSeekKey',
+  clearDeepSeekKey: 'ideasprout:clearDeepSeekKey',
+  addMcpServer: 'ideasprout:addMcpServer',
+  removeMcpServer: 'ideasprout:removeMcpServer',
+  setMcpServerEnabled: 'ideasprout:setMcpServerEnabled',
+  saveExport: 'ideasprout:saveExport',
 } as const
 
 export interface GeneratorInfo {
@@ -292,8 +292,8 @@ export interface UpdateCommentPositionRequest {
   y: number
 }
 
-/** preload 暴露到 window.diverge 的 API 面 */
-export interface DivergeApi {
+/** preload 暴露到 window.ideasprout 的 API 面 */
+export interface IdeaSproutApi {
   listGenerators(): Promise<GeneratorInfo[]>
   ensureProject(): Promise<ProjectFile>
   /** 重命名当前项目；返回同步后的项目文件 */

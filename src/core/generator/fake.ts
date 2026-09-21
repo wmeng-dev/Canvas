@@ -2,7 +2,7 @@
 // 用于：无可用 AI 后端时的兜底、以及 E2E/单测中替代真实生成。
 //
 // 按 contentType 产出对应形态的内容，使 C.4 的多类型预览在无真实模型时也可演示/验证。
-// 测试钩子：DIVERGE_FAKE_ECHO=1 时把 prompt **原样（不转义）** 嵌进内容模板里，
+// 测试钩子：IDEASPROUT_FAKE_ECHO=1 时把 prompt **原样（不转义）** 嵌进内容模板里，
 // 用于验证 HTML/SVG 沙箱是否真的挡住脚本（正常模式下 prompt 会被转义）。
 
 import type { Generator, NodeContent, NodeSpec } from './types'
@@ -85,7 +85,7 @@ export function createFakeGenerator(
   id = 'fake',
   label = '本地占位生成器',
 ): Generator {
-  const echo = process.env.DIVERGE_FAKE_ECHO === '1'
+  const echo = process.env.IDEASPROUT_FAKE_ECHO === '1'
   // 每次生成递增：让"重新生成"产出的版本彼此可区分（真实模型也不会两次完全一样）
   let seq = 0
 

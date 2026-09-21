@@ -101,7 +101,7 @@ export function NodeContextMenu() {
         </div>
 
         <button
-          data-testid="menu-diverge"
+          data-testid="menu-ideasprout"
           onClick={() => {
             selectNode(node.id)
             closeMenu()

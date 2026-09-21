@@ -1,7 +1,7 @@
 {
-  "name": "diverge-desktop",
+  "name": "ideasprout-desktop",
   "version": "0.1.0",
-  "description": "发散创意画布桌面应用 - AI 创意发散树，通过 MCP 对接任意 AI 工具",
+  "description": "风衍 IdeaSprout 桌面应用 - AI 创意发散树，通过 MCP 对接任意 AI 工具",
   "main": "dist-electron/main/main.js",
   "author": "wmeng-dev",
   "license": "MIT",

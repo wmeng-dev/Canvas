@@ -16,7 +16,7 @@ function ok(name) {
   console.log('  ✓', name)
 }
 
-const base = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-ps-'))
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-ps-'))
 const svc = createServices({ dataDir: base, fakeGenerator: true })
 
 // 1. AppStateStore：默认空，写入 lastProjectId 后可回读

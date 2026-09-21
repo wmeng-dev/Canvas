@@ -16,15 +16,15 @@
 //      ELECTRON_RUN_AS_NODE 退化的纯 Node 环境里，所以只用 fs/path/process。
 //
 // 数据目录怎么找（按优先级）：
-//   ① 环境变量 DIVERGE_DATA_DIR —— 主进程拉起示例 Server 时会显式注入这一项。
+//   ① 环境变量 IDEASPROUT_DATA_DIR —— 主进程拉起示例 Server 时会显式注入这一项。
 //      ⚠️ 必须显式注入：MCP SDK 的 StdioClientTransport 只继承一份**安全白名单**环境变量
 //      （Windows 上是 APPDATA/PATH/TEMP 等，见 client/stdio.js 的 DEFAULT_INHERITED_ENV_VARS），
-//      DIVERGE_DATA_DIR 不在其中，不注入就传不过来。
+//      IDEASPROUT_DATA_DIR 不在其中，不注入就传不过来。
 //   ② 标准 userData 路径 + 应用名候选 —— 给"用户手动添加的 Server"兜底：
-//      %APPDATA%\<应用名>\diverge\projects（Windows）
-//      ~/Library/Application Support/<应用名>/diverge/projects（macOS）
-//      $XDG_CONFIG_HOME|~/.config/<应用名>/diverge/projects（Linux）
-//      应用名取"打包名 发散创意画布"与"开发名 diverge-desktop"两个候选。
+//      %APPDATA%\<应用名>\ideasprout\projects（Windows）
+//      ~/Library/Application Support/<应用名>/ideasprout/projects（macOS）
+//      $XDG_CONFIG_HOME|~/.config/<应用名>/ideasprout/projects（Linux）
+//      应用名取"打包名 风衍 IdeaSprout"与"开发名 ideasprout-desktop"两个候选。
 
 import * as fs from 'fs'
 import * as path from 'path'
@@ -69,9 +69,9 @@ export interface TreeNodeView {
 }
 
 /** 应用名候选：打包名 / 开发名（Electron 的 userData 目录名即应用名） */
-const APP_NAME_CANDIDATES = ['发散创意画布', 'diverge-desktop']
+const APP_NAME_CANDIDATES = ['风衍 IdeaSprout', 'ideasprout-desktop']
 
-/** 按平台列出候选的 userData 目录（不含 /diverge/projects 后缀） */
+/** 按平台列出候选的 userData 目录（不含 /ideasprout/projects 后缀） */
 function candidateUserDataDirs(env: NodeJS.ProcessEnv): string[] {
   const out: string[] = []
   if (process.platform === 'win32') {
@@ -97,14 +97,14 @@ function candidateUserDataDirs(env: NodeJS.ProcessEnv): string[] {
  * 惰性调用（每次 tool 调用时算）而不是在模块加载期算一次 —— 环境变量/目录状态都可能在之后才就绪。
  */
 export function resolveProjectsDir(env: NodeJS.ProcessEnv = process.env): string | null {
-  const explicit = env.DIVERGE_DATA_DIR
+  const explicit = env.IDEASPROUT_DATA_DIR
   if (explicit) {
     const dir = path.join(explicit, PROJECTS_DIR)
     // 显式指定时即使目录还不存在也认（可能只是还没建过项目），交给上层报"目录不存在"
     return dir
   }
   for (const base of candidateUserDataDirs(env)) {
-    const dir = path.join(base, 'diverge', PROJECTS_DIR)
+    const dir = path.join(base, 'ideasprout', PROJECTS_DIR)
     if (fs.existsSync(dir)) return dir
   }
   return null

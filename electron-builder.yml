@@ -24,8 +24,8 @@
 #   3) 临时绕过（代价：exe 不带自定义图标/版本信息）：
 #      node scripts/dist.cjs --win --dir -c.win.signAndEditExecutable=false
 
-appId: cn.wmeng.diverge
-productName: 发散创意画布
+appId: cn.wmeng.ideasprout
+productName: 风衍 IdeaSprout
 copyright: Copyright © 2026 wmeng-dev
 
 directories:
@@ -48,7 +48,7 @@ win:
       arch:
         - x64
   icon: build/icon.ico
-  artifactName: Diverge-${version}-win-${arch}-setup.${ext}
+  artifactName: IdeaSprout-${version}-win-${arch}-setup.${ext}
 
 nsis:
   oneClick: false
@@ -56,8 +56,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: 发散创意画布
-  artifactName: Diverge-${version}-win-${arch}-setup.${ext}
+  shortcutName: 风衍 IdeaSprout
+  artifactName: IdeaSprout-${version}-win-${arch}-setup.${ext}
 
 # ---------- macOS ----------
 # ⚠️ 跨平台限制：**dmg / pkg 只能在 macOS 上构建**（electron-builder 需要 macOS 的
@@ -81,10 +81,10 @@ mac:
   category: public.app-category.productivity
   darkModeSupport: true
   identity: null
-  artifactName: Diverge-${version}-mac-${arch}.${ext}
+  artifactName: IdeaSprout-${version}-mac-${arch}.${ext}
 
 dmg:
-  artifactName: Diverge-${version}-mac-${arch}-installer.${ext}
+  artifactName: IdeaSprout-${version}-mac-${arch}-installer.${ext}
   contents:
     - x: 130
       y: 220

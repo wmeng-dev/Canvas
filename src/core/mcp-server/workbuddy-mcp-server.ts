@@ -18,7 +18,7 @@ import {
   resolveProjectsDir,
 } from './project-reader'
 
-const SERVER_NAME = 'workbuddy-diverge'
+const SERVER_NAME = 'workbuddy-ideasprout'
 const SERVER_VERSION = '0.1.0'
 
 interface GenerateToolArgs {
@@ -49,7 +49,7 @@ function runRead(fn: (projectsDir: string) => unknown): ReadOutcome {
           {
             type: 'text',
             text:
-              '找不到画布数据目录。请设置环境变量 DIVERGE_DATA_DIR 指向 Diverge 的应用数据目录' +
+              '找不到画布数据目录。请设置环境变量 IDEASPROUT_DATA_DIR 指向 IdeaSprout 的应用数据目录' +
               '（其下的 projects/ 子目录即画布数据），或让标准 userData 路径下存在该目录。',
           },
         ],
@@ -111,7 +111,7 @@ export function createMcpServer(generator: Generator): McpServer {
     {
       title: 'List canvas projects',
       description:
-        '列出画布（Diverge）里所有项目：id、名称、节点数、最后更新时间（按更新时间倒序）。只读，不修改任何数据。',
+        '列出画布（IdeaSprout）里所有项目：id、名称、节点数、最后更新时间（按更新时间倒序）。只读，不修改任何数据。',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -161,11 +161,11 @@ export function createMcpServer(generator: Generator): McpServer {
 
 /**
  * 按环境变量选择一个默认 generator：
- * - DIVERGE_MCP_FAKE=1：返回确定性假生成器（用于子进程端到端测试，避免联网）。
+ * - IDEASPROUT_MCP_FAKE=1：返回确定性假生成器（用于子进程端到端测试，避免联网）。
  * - 否则：DeepSeek 直连，key 取自 DEEPSEEK_API_KEY。
  */
 function selectGeneratorFromEnv(): Generator {
-  if (process.env.DIVERGE_MCP_FAKE === '1') {
+  if (process.env.IDEASPROUT_MCP_FAKE === '1') {
     return {
       id: 'fake',
       label: 'Fake (env)',

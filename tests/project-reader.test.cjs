@@ -15,7 +15,7 @@ const {
 } = require('../dist-test/core/mcp-server/project-reader')
 const { sanitizeProjectId } = require('../dist-test/core/storage/store')
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-reader-'))
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-reader-'))
 fs.mkdirSync(dir, { recursive: true })
 
 const writeRaw = (name, text) => fs.writeFileSync(path.join(dir, name), text, 'utf-8')
@@ -151,10 +151,10 @@ ok('路径穿越 / 未知节点 / 坏文件 → 明确抛错（不返回空数�
 assert.deepStrictEqual(listProjects(path.join(dir, 'no-such-dir')), [])
 ok('listProjects：目录不存在返回空数组')
 
-// 10) resolveProjectsDir 优先级：显式 DIVERGE_DATA_DIR 最优先
-assert.strictEqual(resolveProjectsDir({ DIVERGE_DATA_DIR: '/tmp/xyz' }), path.join('/tmp/xyz', 'projects'))
+// 10) resolveProjectsDir 优先级：显式 IDEASPROUT_DATA_DIR 最优先
+assert.strictEqual(resolveProjectsDir({ IDEASPROUT_DATA_DIR: '/tmp/xyz' }), path.join('/tmp/xyz', 'projects'))
 // 空环境（无 APPDATA/HOME 等）→ 没有候选目录 → null
 assert.strictEqual(resolveProjectsDir({}), null)
-ok('resolveProjectsDir：优先 DIVERGE_DATA_DIR；无候选时返回 null')
+ok('resolveProjectsDir：优先 IDEASPROUT_DATA_DIR；无候选时返回 null')
 
 console.log(`\nALL PROJECT READER TESTS PASSED (${passed} checks)`)

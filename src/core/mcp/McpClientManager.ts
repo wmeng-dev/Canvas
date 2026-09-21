@@ -37,7 +37,7 @@ export class McpClientManager {
       cwd: cfg.cwd,
     })
     const client = new Client(
-      { name: 'workbuddy-diverge', version: '0.1.0' },
+      { name: 'workbuddy-ideasprout', version: '0.1.0' },
       { capabilities: {} },
     )
     await client.connect(transport)

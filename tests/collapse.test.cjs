@@ -84,7 +84,7 @@ ok('expanding a keeps b collapsed → d/e stay hidden')
 
 // ---------------- 3. 仓储：默认值 / 落库 / 独立性 ----------------
 
-const base = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-collapse-'))
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-collapse-'))
 const store = new JsonStore({ baseDir: base })
 const repo = new ProjectRepository(store)
 

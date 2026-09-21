@@ -179,7 +179,7 @@ const dirty = { ...tree, projectName: 'a/b:c*d?e"f<g>h|i' }
 assert.strictEqual(suggestedFileName(dirty, 'markdown'), 'a_b_c_d_e_f_g_h_i_2026-09-20.md')
 // 名字被清空（纯空白）时回落到默认名
 const blank = { ...tree, projectName: '   ' }
-assert.strictEqual(suggestedFileName(blank, 'markdown'), '发散创意画布_2026-09-20.md')
+assert.strictEqual(suggestedFileName(blank, 'markdown'), '风衍_2026-09-20.md')
 ok('suggestedFileName: date stamp, scope tag, sanitized illegal chars, blank fallback')
 
 console.log(`\nALL EXPORT TESTS PASSED (${passed} checks)`)

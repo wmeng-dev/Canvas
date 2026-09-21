@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 export interface JsonStoreOptions {
-  /** 存储根目录，例如 app.getPath('userData')/diverge */
+  /** 存储根目录，例如 app.getPath('userData')/ideasprout */
   baseDir: string
 }
 

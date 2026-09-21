@@ -79,8 +79,8 @@ export function registerIpcHandlers(svc: AppServices): void {
   ipcMain.handle(IPC.saveProjectAs, async (evt, req: SaveProjectAsRequest) => {
     const file = svc.repo.get(req.projectId)
     const content = JSON.stringify(file, null, 2)
-    const suggestedName = sanitizeFileName(req.suggestedName || `${file.project.name || 'diverge-project'}.json`)
-    const filters = [{ name: 'Diverge 项目', extensions: ['json'] }]
+    const suggestedName = sanitizeFileName(req.suggestedName || `${file.project.name || 'ideasprout-project'}.json`)
+    const filters = [{ name: 'IdeaSprout 项目', extensions: ['json'] }]
     const parent = BrowserWindow.fromWebContents(evt.sender)
     const result = parent
       ? await dialog.showSaveDialog(parent, { defaultPath: suggestedName, filters })
@@ -96,7 +96,7 @@ export function registerIpcHandlers(svc: AppServices): void {
 
   // "打开"：从用户选定的 .json 导入项目，落库并设为 lastProjectId。
   ipcMain.handle(IPC.openProject, async (evt): Promise<OpenProjectResponse> => {
-    const filters = [{ name: 'Diverge 项目', extensions: ['json'] }]
+    const filters = [{ name: 'IdeaSprout 项目', extensions: ['json'] }]
     const parent = BrowserWindow.fromWebContents(evt.sender)
     const result = parent
       ? await dialog.showOpenDialog(parent, { properties: ['openFile'], filters })

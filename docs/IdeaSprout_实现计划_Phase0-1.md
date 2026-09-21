@@ -1,8 +1,8 @@
-# 发散创意画布桌面应用 · Phase 0/1 详细实现计划
+# 风衍 IdeaSprout 桌面应用 · Phase 0/1 详细实现计划
 
-> 配套纲领：`发散创意画布桌面应用_方案.md`（v0.1）
+> 配套纲领：`IdeaSprout桌面应用_方案.md`（v0.1）
 > 本文档提供可直接落地的目录结构、核心模块代码骨架、里程碑与验收标准。
-> 项目代号建议：**Diverge**（发散）。下文以 `diverge-desktop/` 为仓库根。
+> 项目代号建议：**IdeaSprout**（发散）。下文以 `ideasprout-desktop/` 为仓库根。
 
 ---
 
@@ -41,7 +41,7 @@ node                >= 20（本机用 managed 22）
 ## 2. 目录结构
 
 ```
-diverge-desktop/
+ideasprout-desktop/
 ├── package.json
 ├── electron-builder.yml
 ├── vite.config.ts                # 渲染进程构建
@@ -122,9 +122,9 @@ import { schema } from './schema.sql?raw'; // 或读文件字符串
 let _db: Database.Database | null = null;
 export function getDb(): Database.Database {
   if (_db) return _db;
-  const dir = path.join(app.getPath('userData'), 'diverge');
+  const dir = path.join(app.getPath('userData'), 'ideasprout');
   require('fs').mkdirSync(dir, { recursive: true });
-  _db = new Database(path.join(dir, 'diverge.db'));
+  _db = new Database(path.join(dir, 'ideasprout.db'));
   _db.pragma('journal_mode = WAL');
   _db.exec(schema);          // schema.sql 内容内联或读取
   return _db;
@@ -227,7 +227,7 @@ export class McpClientManager {
       args: JSON.parse(cfg.args || '[]'),
       env: JSON.parse(cfg.env || '{}'),
     });
-    const client = new Client({ name: 'diverge', version: '0.1' }, { capabilities: {} });
+    const client = new Client({ name: 'ideasprout', version: '0.1' }, { capabilities: {} });
     await client.connect(transport);
     this.clients.set(cfg.id, client);
     return client;
@@ -348,7 +348,7 @@ app.whenReady().then(() => { registerIpc(); createWindow(); });
 | ID | 任务 | 验收标准（DoD） |
 |---|---|---|
 | P0-1 | Electron+Vite+React+TS 空壳跑通 | `npm run dev` 打开窗口并渲染一个 React 页面；热更新可用 |
-| P0-2 | SQLite 存储层 + 建表 | 启动后 `userData/diverge/diverge.db` 存在，5 张表就位；可插入并读回一条 project |
+| P0-2 | SQLite 存储层 + 建表 | 启动后 `userData/ideasprout/ideasprout.db` 存在，5 张表就位；可插入并读回一条 project |
 | P0-3 | DeepSeek 直连 adapter | 配 key 后，给定 prompt 能返回文本并在控制台/预览显示 |
 | P0-4 | MCP 接入示例 Server | `McpClientManager` 拉起 `workbuddy-mcp-server`，`listTools` 看到 `generate`，`callTool` 成功返回 |
 | P0-5 | 端到端打通 | 画布点节点 → 选 DeepSeek 或 MCP 后端 → 生成内容落库并预览 |
@@ -370,8 +370,8 @@ app.whenReady().then(() => { registerIpc(); createWindow(); });
 
 ## 11. Windows 打包（`electron-builder.yml` 要点）
 ```yaml
-appId: com.diverge.desktop
-productName: Diverge 发散创意画布
+appId: com.ideasprout.desktop
+productName: 风衍 IdeaSprout
 directories:
   output: dist-electron
 files: ["dist/**/*", "dist-electron/**/*"]

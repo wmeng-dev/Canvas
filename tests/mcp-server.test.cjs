@@ -73,7 +73,7 @@ const { createMcpServer } = require('../dist-test/core/mcp-server/workbuddy-mcp-
 
   // ---------- 5) 只读 tool 真的读到磁盘上的画布 JSON ----------
   const T = '2024-01-01T00:00:00.000Z'
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-mcpsrv-'))
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-mcpsrv-'))
   const projectsDir = path.join(dataDir, 'projects')
   fs.mkdirSync(projectsDir, { recursive: true })
   fs.writeFileSync(
@@ -102,7 +102,7 @@ const { createMcpServer } = require('../dist-test/core/mcp-server/workbuddy-mcp-
       },
     }),
   )
-  process.env.DIVERGE_DATA_DIR = dataDir
+  process.env.IDEASPROUT_DATA_DIR = dataDir
 
   const lp = await client.callTool({ name: 'list_projects', arguments: {} })
   assert.ok(!lp.isError, lp.content[0].text)
@@ -138,21 +138,21 @@ const { createMcpServer } = require('../dist-test/core/mcp-server/workbuddy-mcp-
 
   // ---------- 7) 数据目录无法定位 → isError 且给出怎么办 ----------
   // 临时清掉所有候选来源，保证"解析不到"这条分支确定命中（本机可能真有 dev 数据目录）
-  const saved = { d: process.env.DIVERGE_DATA_DIR, a: process.env.APPDATA, l: process.env.LOCALAPPDATA, h: process.env.HOME }
-  delete process.env.DIVERGE_DATA_DIR
+  const saved = { d: process.env.IDEASPROUT_DATA_DIR, a: process.env.APPDATA, l: process.env.LOCALAPPDATA, h: process.env.HOME }
+  delete process.env.IDEASPROUT_DATA_DIR
   delete process.env.APPDATA
   delete process.env.LOCALAPPDATA
   delete process.env.HOME
   const noDir = await client.callTool({ name: 'list_projects', arguments: {} })
   Object.assign(process.env, {
-    ...(saved.d ? { DIVERGE_DATA_DIR: saved.d } : {}),
+    ...(saved.d ? { IDEASPROUT_DATA_DIR: saved.d } : {}),
     ...(saved.a ? { APPDATA: saved.a } : {}),
     ...(saved.l ? { LOCALAPPDATA: saved.l } : {}),
     ...(saved.h ? { HOME: saved.h } : {}),
   })
   assert.ok(noDir.isError, 'unresolvable data dir must be isError')
-  assert.ok(/DIVERGE_DATA_DIR/.test(noDir.content[0].text), noDir.content[0].text)
-  ok('unresolvable data dir => isError telling the user to set DIVERGE_DATA_DIR')
+  assert.ok(/IDEASPROUT_DATA_DIR/.test(noDir.content[0].text), noDir.content[0].text)
+  ok('unresolvable data dir => isError telling the user to set IDEASPROUT_DATA_DIR')
 
   await client.close()
   await server.close()

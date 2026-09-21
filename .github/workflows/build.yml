@@ -4,9 +4,9 @@
 #   · push 标签 v*（发版）
 #   · 或手动 workflow_dispatch（可在 Actions 页面点 Run workflow）
 # 产物：Actions 运行页底部的 Artifacts
-#   · Diverge-win-installer   → .exe 安装包（nsis）
-#   · Diverge-mac-dmg         → .dmg（x64 / arm64）
-#   · Diverge-mac-zip         → .zip 免安装版（x64 / arm64）
+#   · IdeaSprout-win-installer   → .exe 安装包（nsis）
+#   · IdeaSprout-mac-dmg         → .dmg（x64 / arm64）
+#   · IdeaSprout-mac-zip         → .zip 免安装版（x64 / arm64）
 #
 # 关于签名（未签名也能出包，只是 macOS 会提示"无法验证开发者"，需右键 → 打开）：
 #   · macOS 签名：在仓库 Secrets 里配 MAC_CERTIFICATE（base64 的 .p12）、MAC_CERTIFICATE_PASSWORD、
@@ -35,7 +35,7 @@ jobs:
         run: npx electron-builder --win --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: Diverge-win-installer
+          name: IdeaSprout-win-installer
           path: release/*.exe
 
   macos:
@@ -55,9 +55,9 @@ jobs:
         run: npx electron-builder --mac --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: Diverge-mac-dmg
+          name: IdeaSprout-mac-dmg
           path: release/*.dmg
       - uses: actions/upload-artifact@v4
         with:
-          name: Diverge-mac-zip
+          name: IdeaSprout-mac-zip
           path: release/*.zip

@@ -23,7 +23,7 @@ const {
 let passed = 0
 function ok(name) { passed++; console.log('  ✓', name) }
 
-const base = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-close-'))
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-close-'))
 const repo = new ProjectRepository(new JsonStore({ baseDir: base }))
 const appState = new AppStateStore(base)
 const svc = { repo, appState }

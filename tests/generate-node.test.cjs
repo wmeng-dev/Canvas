@@ -12,7 +12,7 @@ const { mapWithConcurrency } = require('../dist-test/core/concurrency')
 let passed = 0
 function ok(name) { passed++; console.log('  ✓', name) }
 
-const base = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-gen-'))
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-gen-'))
 
 // 必然失败的生成器（用于验证"批量发散时个别失败不拖垮整批"）
 const flaky = {
@@ -81,7 +81,7 @@ ok('ensureProject is idempotent')
   assert.strictEqual(n1.versions.length, 1)
   assert.strictEqual(n1.currentVersionId, n1.versions[0].id)
   assert.strictEqual(n1.versions[0].content, n1.content)
-  ok('single diverge creates node + edge + initial version (title/analysis persisted)')
+  ok('single ideasprout creates node + edge + initial version (title/analysis persisted)')
 
   // 5. 落盘校验
   const after = svc.repo.get(projectId)
@@ -149,7 +149,7 @@ ok('ensureProject is idempotent')
   assert.ok(batch.items.every((i, k) => i.edge && i.edge.source === rootId && i.edge.target === i.node.id))
   assert.strictEqual(svc.repo.get(projectId).tree.edges.length, beforeEdgeCount + 3)
   assert.ok(batch.items.every((i) => i.node.versions.length === 1), 'each node starts with v1')
-  ok('batch diverge (count=3) creates 3 children + 3 edges with staggered positions')
+  ok('batch ideasprout (count=3) creates 3 children + 3 edges with staggered positions')
 
   // 11. count 上限收敛
   const clamped = await generateNode(svc, { projectId, parentNodeId: null, prompt: '上限测试', count: 99 })
@@ -341,7 +341,7 @@ ok('ensureProject is idempotent')
   // 27. 旧数据兼容：版本没有 prompt 时，翻案保留节点上的描述（不清空）
   const { JsonStore } = require('../dist-test/core/storage/store')
   const { ProjectRepository } = require('../dist-test/core/storage/repositories')
-  const legacyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-legacy-'))
+  const legacyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-legacy-'))
   const legacyStore = new JsonStore({ baseDir: legacyDir })
   const legacyId = 'legacy-proj'
   const legacyTs = new Date().toISOString()

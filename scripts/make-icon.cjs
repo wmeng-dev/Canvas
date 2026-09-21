@@ -5,7 +5,7 @@
 // 图形（设计定案）：
 //   深色圆角「画布」底（自上而下的渐变）+ 中心偏左一个根节点，向右呈 38° 扇形发散出三个子节点；
 //   连线从根到叶逐渐变细、颜色由蓝渐变到紫；节点带同色微光。
-//   语义：一个想法发散成多个方向 —— 呼应「发散创意画布」。
+//   语义：一个想法发散成多个方向 —— 呼应「风衍 IdeaSprout」。
 //   配色取自应用自身主题（#1f6feb 蓝 / #8957e5 紫 / #0d1117 底），不是另起一套。
 //
 // ⚠️ SVG 与 PNG 从**同一份常量**生成（下方 GEOMETRY / COLORS）：改设计只改常量，两处不会走样。
@@ -260,7 +260,7 @@ function buildSvg(size = 256) {
   }
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="发散创意画布">\n` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="风衍 IdeaSprout">\n` +
     `  <defs>\n    ${defs.join('\n    ')}\n  </defs>\n  ${parts.join('\n  ')}\n</svg>\n`
   )
 }

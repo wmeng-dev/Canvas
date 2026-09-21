@@ -1,4 +1,4 @@
-// C.3/C.5/C.6 preload：在 contextIsolation 下，仅向渲染端暴露最小 API 面（window.diverge）。
+// C.3/C.5/C.6 preload：在 contextIsolation 下，仅向渲染端暴露最小 API 面（window.ideasprout）。
 // 不暴露 ipcRenderer 本体，渲染端只能调用白名单内的方法。
 
 import { contextBridge, ipcRenderer } from 'electron'
@@ -7,7 +7,7 @@ import type {
   AddCanvasCommentRequest,
   AddMcpServerRequest,
   AddNodeCommentRequest,
-  DivergeApi,
+  IdeaSproutApi,
   GenerateNodeRequest,
   OpenProjectResponse,
   RenameProjectRequest,
@@ -30,7 +30,7 @@ import type {
   UpdateNodePromptRequest,
 } from '../shared/ipc'
 
-const api: DivergeApi = {
+const api: IdeaSproutApi = {
   listGenerators: () => ipcRenderer.invoke(IPC.listGenerators),
   ensureProject: () => ipcRenderer.invoke(IPC.ensureProject),
   renameProject: (req: RenameProjectRequest) => ipcRenderer.invoke(IPC.renameProject, req),
@@ -73,4 +73,4 @@ const api: DivergeApi = {
   saveExport: (req: SaveExportRequest) => ipcRenderer.invoke(IPC.saveExport, req),
 }
 
-contextBridge.exposeInMainWorld('diverge', api)
+contextBridge.exposeInMainWorld('ideasprout', api)

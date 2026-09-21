@@ -23,7 +23,7 @@ function check(name, cond, extra) {
 }
 
 function tmpDir() {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-archive-'))
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-archive-'))
   return d
 }
 

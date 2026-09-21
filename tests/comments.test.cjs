@@ -14,7 +14,7 @@ const { ProjectRepository } = require('../dist-test/core/storage/repositories')
 let passed = 0
 function ok(name) { passed++; console.log('  ✓', name) }
 
-const base = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-comments-'))
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-comments-'))
 const store = new JsonStore({ baseDir: base })
 const repo = new ProjectRepository(store)
 

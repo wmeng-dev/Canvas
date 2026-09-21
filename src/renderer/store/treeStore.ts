@@ -26,7 +26,7 @@ export const PREVIEW_WIDTH_MAX = 960
 export const PREVIEW_WIDTH_DEFAULT = 340
 /** 拖到上限时至少给左侧画布留出的宽度 */
 const CANVAS_MIN_WIDTH = 360
-const PREVIEW_WIDTH_KEY = 'diverge.previewWidth'
+const PREVIEW_WIDTH_KEY = 'ideasprout.previewWidth'
 
 /** 面板宽度上限：取"固定上限"与"视口留白"中的小者，避免把画布挤没。 */
 export function clampPreviewWidth(w: number): number {
@@ -485,7 +485,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   placingComment: false,
 
   init: async () => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) {
       set({ generators: [{ id: 'fake', label: '本地占位生成器（无主进程）', kind: 'direct' }] })
       return
@@ -521,7 +521,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   // ---------------- 项目文件：重命名 / 保存 / 另存为 / 打开 ----------------
   renameProject: async (name) => {
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) {
       set({ error: '需要主进程支持才能重命名。' })
       return
@@ -538,7 +538,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
 
   saveProject: async () => {
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) {
       set({ error: '需要主进程支持才能保存。' })
       return
@@ -553,7 +553,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
 
   saveProjectAs: async () => {
     const { projectId, projectName } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) {
       set({ error: '需要主进程支持才能导出项目文件。' })
       return
@@ -561,7 +561,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
     try {
       const res = await api.saveProjectAs({
         projectId,
-        suggestedName: `${projectName || 'diverge-project'}.json`,
+        suggestedName: `${projectName || 'ideasprout-project'}.json`,
       })
       if (res.saved && res.path) {
         set({ lastSavedAt: new Date().toISOString(), projectPath: res.path, error: null })
@@ -574,7 +574,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   openProject: async () => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) {
       set({ error: '需要主进程支持才能打开项目。' })
       return
@@ -618,7 +618,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) }),
 
   loadProjects: async () => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) return
     try {
       const res = await api.listProjects()
@@ -629,7 +629,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   createProject: async () => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) {
       set({ error: '需要主进程支持才能新建画布。' })
       return
@@ -651,7 +651,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   switchProject: async (projectId) => {
-    const api = window.diverge
+    const api = window.ideasprout
     const { projectId: currentId } = get()
     if (!api) {
       set({ error: '需要主进程支持才能切换画布。' })
@@ -675,7 +675,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   onConnect: (conn) => set({ edges: addEdge({ ...conn, animated: true }, get().edges) }),
 
   loadClosedProjects: async () => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) return
     try {
       const closed = await api.listClosedProjects()
@@ -686,7 +686,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   closeProject: async (projectId) => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) {
       set({ error: '需要主进程支持才能关闭画布。' })
       return
@@ -716,7 +716,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   reopenProject: async (projectId) => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) {
       set({ error: '需要主进程支持才能恢复画布。' })
       return
@@ -768,7 +768,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
         : list
     set({ generating: true, error: null, warning: null, menu: null })
 
-    const api = window.diverge
+    const api = window.ideasprout
     try {
       if (!api) {
         // 无主进程：本地占位，保证对话框在纯浏览器下也可用
@@ -859,7 +859,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
    */
   generateProposal: async (nodeId) => {
     const { nodes, projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!projectId) {
       set({ error: '项目尚未加载' })
       return
@@ -894,7 +894,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   regenerate: async (nodeId, prompt) => {
 
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) {
       set({ error: '需要主进程支持才能重新生成。' })
       return
@@ -922,7 +922,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
 
   savePrompt: async (nodeId, prompt) => {
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) {
       set({ error: '需要主进程支持才能保存描述。' })
       return
@@ -942,7 +942,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
 
   setVersion: async (nodeId, versionId) => {
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) {
       set({ error: '需要主进程支持才能翻案。' })
       return
@@ -965,7 +965,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
       list.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, collapsed: v } } : n))
     // 乐观更新：先切本地让画布立刻收展，再落库；落库失败回滚到原状态
     set({ nodes: apply(nodes, next) })
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) return // 无主进程（纯浏览器预览）：仅本地生效
     try {
       await api.setNodeCollapsed({ projectId, nodeId, collapsed: next })
@@ -986,7 +986,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
       nodes: nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, archived: true } } : n)),
       selectedNodeId: gone.has(get().selectedNodeId ?? '') ? null : get().selectedNodeId,
     })
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) return
     try {
       await api.setNodeArchived({ projectId, nodeIds: [nodeId], archived: true })
@@ -1008,7 +1008,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
       ),
       selectedNodeId: nodeId,
     })
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) return
     try {
       await api.setNodeArchived({ projectId, nodeIds: ids, archived: false })
@@ -1025,7 +1025,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
       list.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, color: c } } : n))
     // 乐观更新：先改本地让卡片立刻变色，再落库；落库失败回滚到原色
     set({ nodes: apply(nodes, color) })
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) return // 无主进程（纯浏览器预览）：仅本地生效
     try {
       await api.setNodeColor({ projectId, nodeId, color: color ?? null })
@@ -1041,7 +1041,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   closeAi: () => set({ aiOpen: false }),
 
   loadAiSettings: async () => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) return
     try {
       set({ aiSettings: await api.getAiSettings() })
@@ -1051,7 +1051,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   setDeepSeekKey: async (apiKey) => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) return
     set({ aiBusy: true, error: null })
     try {
@@ -1063,7 +1063,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   clearDeepSeekKey: async () => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) return
     set({ aiBusy: true, error: null })
     try {
@@ -1075,7 +1075,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   addMcpServer: async (req) => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) return
     set({ aiBusy: true, error: null })
     try {
@@ -1087,7 +1087,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   removeMcpServer: async (id) => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) return
     set({ aiBusy: true, error: null })
     try {
@@ -1099,7 +1099,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   setMcpServerEnabled: async (id, enabled) => {
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api) return
     set({ aiBusy: true, error: null })
     try {
@@ -1130,7 +1130,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
     const text = body.trim()
     if (!text) return false
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) {
       // 无主进程（纯浏览器预览）：本地占位，保证功能可用
       const thread: CommentThread = {
@@ -1160,7 +1160,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   addCanvasComment: async (pos) => {
     set({ placingComment: false }) // 放置是一次性动作，创建后立即退出放置模式
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) {
       const thread: CommentThread = {
         id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1187,7 +1187,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
 
   updateCommentBody: async (threadId, body) => {
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     const text = body.trim()
     if (api && projectId) {
       try {
@@ -1208,7 +1208,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
 
   removeComment: async (threadId) => {
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     deleteThread(threadId) // 本地先删（含收起弹层），落库失败只报错条
     if (api && projectId) {
       try {
@@ -1222,7 +1222,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
 
   updateCommentPosition: async (threadId, x, y) => {
     const { projectId } = get()
-    const api = window.diverge
+    const api = window.ideasprout
     if (!api || !projectId) return
     try {
       await api.updateCommentPosition({ projectId, threadId, x, y })
@@ -1252,7 +1252,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
  * 画布纹丝不动，且 B 那份从没跑过 init()、projectId 是空的 → 写不进磁盘。
  * 挂到 globalThis 后，无论被打成几份，全应用拿到的都是同一个 store。
  */
-type StoreSingletonHost = typeof globalThis & { __divergeTreeStore__?: typeof createdTreeStore }
+type StoreSingletonHost = typeof globalThis & { __ideasproutTreeStore__?: typeof createdTreeStore }
 export const useTreeStore = (
-  (globalThis as StoreSingletonHost).__divergeTreeStore__ ??= createdTreeStore
+  (globalThis as StoreSingletonHost).__ideasproutTreeStore__ ??= createdTreeStore
 )

@@ -67,7 +67,7 @@ ok('没有评估/内容的层也能正常拼出来')
 // ---------------- 3. 建节点 ----------------
 console.log('\n[3] 生成方案并落库')
 function makeSvc() {
-  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-proposal-'))
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-proposal-'))
   return createServices({ dataDir: baseDir, secrets: plaintextSecretBox(), fakeGenerator: true })
 }
 
@@ -132,7 +132,7 @@ async function main() {
   ok('节点不存在 → 报错')
 
   const noGen = createServices({
-    dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-proposal-nogen-')),
+    dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-proposal-nogen-')),
     secrets: plaintextSecretBox(),
   })
   const f2 = ensureProject(noGen)

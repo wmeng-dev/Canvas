@@ -54,7 +54,7 @@ ok('每个色的 bg / border 都是合法 6 位十六进制')
 
 // ---------------- 2. 仓储 ----------------
 console.log('\n[2] 仓储：改色 / 落盘 / 重读')
-const base = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-color-'))
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-color-'))
 const repo = new ProjectRepository(new JsonStore({ baseDir: base }))
 const file = repo.create('配色测试')
 const pid = file.project.id
@@ -100,7 +100,7 @@ ok('改色不触碰内容 / 收展 / 归档等其它字段')
 
 // ---------------- 3. 老项目文件兼容 ----------------
 console.log('\n[3] 老项目文件兼容')
-const base2 = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-color-old-'))
+const base2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ideasprout-color-old-'))
 const repo2 = new ProjectRepository(new JsonStore({ baseDir: base2 }))
 const f2 = repo2.create('老文件')
 const n2 = repo2.addNode(f2.project.id, { label: '旧节点', prompt: '', status: 'empty' })

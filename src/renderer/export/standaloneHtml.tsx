@@ -196,7 +196,7 @@ export function renderStandaloneHtml(doc: ExportDoc): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(doc.projectName)} · 发散创意画布</title>
+<title>${esc(doc.projectName)} · 风衍 IdeaSprout</title>
 <style>${DOC_CSS}</style>
 </head>
 <body>
@@ -209,7 +209,7 @@ ${renderToc(doc)}
 <main>
 ${body}
 </main>
-<footer class="doc">由「发散创意画布 · Diverge」导出 · 单文件 HTML（含内联样式，无外部依赖）</footer>
+<footer class="doc">由「风衍 IdeaSprout」导出 · 单文件 HTML（含内联样式，无外部依赖）</footer>
 </div>
 </body>
 </html>

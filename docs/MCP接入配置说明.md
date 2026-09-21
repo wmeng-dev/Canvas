@@ -1,9 +1,9 @@
-# Diverge 画布 MCP 接入配置说明（AI 可执行版）
+# IdeaSprout 画布 MCP 接入配置说明（AI 可执行版）
 
 > **这份文档是给 AI 用的执行手册**，不是给人看的介绍文。
 > AI 读到它应当能**自己把 MCP 配好并验证通过**，不需要人再解释一遍。
 > 目标：让 Codex CLI / Trae / WorkBuddy / DeepSeek Harness（DSH）等支持 MCP 的客户端，
-> 都能直接读取「发散创意画布」里的画布数据（项目、发散树、节点版本），并可选地调用生成能力。
+> 都能直接读取「风衍 IdeaSprout」里的画布数据（项目、发散树、节点版本），并可选地调用生成能力。
 
 ---
 
@@ -29,7 +29,7 @@
    `<仓库>/dist-electron/core/mcp-server/workbuddy-mcp-server.js`
    不存在就在仓库根目录跑：`npm run build:main`（只编译主进程与 core，几秒）。
 3. **画布数据目录**：下面二者之一能定位到 `projects/` 目录
-   - 显式（推荐）：设环境变量 `DIVERGE_DATA_DIR`，指向**含 `projects/` 子目录**的目录。
+   - 显式（推荐）：设环境变量 `IDEASPROUT_DATA_DIR`，指向**含 `projects/` 子目录**的目录。
    - 不设也能用，server 会自动找标准 userData 路径（见 §2 表格）。
 4. **DeepSeek key（可选）**：只有 `generate` 工具需要（联网调模型）。
    只用三个只读工具（`list_projects` / `get_tree` / `get_node`）就不用配 key。
@@ -41,7 +41,7 @@
 ```
 command: node
 args:    ["{REPO}/dist-electron/core/mcp-server/workbuddy-mcp-server.js"]
-env:     DIVERGE_DATA_DIR = "{DATA_DIR}"     # 推荐显式给；不给则走自动查找
+env:     IDEASPROUT_DATA_DIR = "{DATA_DIR}"     # 推荐显式给；不给则走自动查找
          DEEPSEEK_API_KEY = "sk-..."         # 可选，仅 generate 需要
 ```
 
@@ -49,21 +49,21 @@ env:     DIVERGE_DATA_DIR = "{DATA_DIR}"     # 推荐显式给；不给则走自
 - **不要**加 `ELECTRON_RUN_AS_NODE`。那是画布**内部**拉起外部 MCP server 时用 Electron 当 Node 的技巧；这里直接用 `node`。
 - 路径里的反斜杠：JSON 中必须写成 `\\`（如 `E:\\Canvas\\...`），TOML 中用普通字符串即可。
 
-### 数据目录怎么找（不设 `DIVERGE_DATA_DIR` 时的自动查找顺序）
+### 数据目录怎么找（不设 `IDEASPROUT_DATA_DIR` 时的自动查找顺序）
 
 | 平台 | 候选路径 |
 | --- | --- |
-| Windows | `%APPDATA%\发散创意画布\diverge\projects`、`%APPDATA%\diverge-desktop\diverge\projects` |
-| macOS | `~/Library/Application Support/发散创意画布/diverge/projects`（开发名 `diverge-desktop` 同理） |
-| Linux | `$XDG_CONFIG_HOME` 或 `~/.config` 下的 `<应用名>/diverge/projects` |
+| Windows | `%APPDATA%\风衍 IdeaSprout\ideasprout\projects`、`%APPDATA%\ideasprout-desktop\ideasprout\projects` |
+| macOS | `~/Library/Application Support/风衍 IdeaSprout/ideasprout/projects`（开发名 `ideasprout-desktop` 同理） |
+| Linux | `$XDG_CONFIG_HOME` 或 `~/.config` 下的 `<应用名>/ideasprout/projects` |
 
-> 自动查找靠"目录存在"判定；**推荐显式设 `DIVERGE_DATA_DIR`**，省掉一半排障时间。
+> 自动查找靠"目录存在"判定；**推荐显式设 `IDEASPROUT_DATA_DIR`**，省掉一半排障时间。
 
 ---
 
 ## 3. 各客户端配置片段
 
-server 在客户端里叫什么名字可自定，下文统一用 **`diverge`**。
+server 在客户端里叫什么名字可自定，下文统一用 **`ideasprout`**。
 
 ### 3.1 Codex CLI
 
@@ -71,17 +71,17 @@ server 在客户端里叫什么名字可自定，下文统一用 **`diverge`**�
 - 顶层键是 **`mcp_servers`**（不是 `mcpServers`）
 
 ```toml
-[mcp_servers.diverge]
+[mcp_servers.ideasprout]
 command = "node"
 args = ["{REPO}/dist-electron/core/mcp-server/workbuddy-mcp-server.js"]
-env = { DIVERGE_DATA_DIR = "{DATA_DIR}", DEEPSEEK_API_KEY = "sk-可选" }
+env = { IDEASPROUT_DATA_DIR = "{DATA_DIR}", DEEPSEEK_API_KEY = "sk-可选" }
 startup_timeout_sec = 20
 ```
 
 命令行等价写法（不想手改文件时用）：
 
 ```bash
-codex mcp add diverge --env DIVERGE_DATA_DIR={DATA_DIR} -- node {REPO}/dist-electron/core/mcp-server/workbuddy-mcp-server.js
+codex mcp add ideasprout --env IDEASPROUT_DATA_DIR={DATA_DIR} -- node {REPO}/dist-electron/core/mcp-server/workbuddy-mcp-server.js
 ```
 
 `codex mcp list` 可查看已配置的 server。
@@ -97,11 +97,11 @@ codex mcp add diverge --env DIVERGE_DATA_DIR={DATA_DIR} -- node {REPO}/dist-elec
 ```json
 {
   "mcpServers": {
-    "diverge": {
+    "ideasprout": {
       "command": "node",
       "args": ["{REPO}/dist-electron/core/mcp-server/workbuddy-mcp-server.js"],
       "env": {
-        "DIVERGE_DATA_DIR": "{DATA_DIR}",
+        "IDEASPROUT_DATA_DIR": "{DATA_DIR}",
         "DEEPSEEK_API_KEY": "sk-可选"
       }
     }
@@ -117,11 +117,11 @@ codex mcp add diverge --env DIVERGE_DATA_DIR={DATA_DIR} -- node {REPO}/dist-elec
 ```json
 {
   "mcpServers": {
-    "diverge": {
+    "ideasprout": {
       "command": "node",
       "args": ["{REPO}/dist-electron/core/mcp-server/workbuddy-mcp-server.js"],
       "env": {
-        "DIVERGE_DATA_DIR": "{DATA_DIR}",
+        "IDEASPROUT_DATA_DIR": "{DATA_DIR}",
         "DEEPSEEK_API_KEY": "sk-可选"
       }
     }
@@ -132,17 +132,17 @@ codex mcp add diverge --env DIVERGE_DATA_DIR={DATA_DIR} -- node {REPO}/dist-elec
 ### 3.4 DeepSeek Harness（DSH）
 
 - 配置文件：**项目根目录 `.mcp.json`**（Claude-Code / Cursor 兼容的 `mcpServers` 字典）
-- server 名需匹配 `[A-Za-z0-9_-]{1,32}` → `diverge` 合规
+- server 名需匹配 `[A-Za-z0-9_-]{1,32}` → `ideasprout` 合规
 - 改完**必须重启 Harness 会话**（旧会话不会热加载 MCP 配置）
 
 ```json
 {
   "mcpServers": {
-    "diverge": {
+    "ideasprout": {
       "command": "node",
       "args": ["{REPO}/dist-electron/core/mcp-server/workbuddy-mcp-server.js"],
       "env": {
-        "DIVERGE_DATA_DIR": "{DATA_DIR}",
+        "IDEASPROUT_DATA_DIR": "{DATA_DIR}",
         "DEEPSEEK_API_KEY": "sk-可选"
       }
     }
@@ -185,7 +185,7 @@ PowerShell：
 ```
 
 bash / zsh 用 `echo '...' | node ...` 同理。
-期望：stdout 打出一行 JSON，`result.serverInfo` 为 `{"name":"workbuddy-diverge","version":"0.1.0"}`。
+期望：stdout 打出一行 JSON，`result.serverInfo` 为 `{"name":"workbuddy-ideasprout","version":"0.1.0"}`。
 **没有任何输出 / 直接退出 → 入口文件没构建或 node 版本不对，先修这个，别急着改客户端配置。**
 
 **第二步：在客户端里显式调用**（不要问「能用吗」）：
@@ -206,8 +206,8 @@ bash / zsh 用 `echo '...' | node ...` 同理。
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | 命令行自检无输出 / 秒退 | 没构建产物，或 node < 18 | 跑 `npm run build:main`；升级 node |
-| 客户端里看不到任何 `diverge` 工具 | 配置文件位置写错，或没重启 / 没 Trust | 核对 §3 的路径；按 §4 生效 |
-| 工具在但调用报「找不到画布数据目录」 | `DIVERGE_DATA_DIR` 指向的目录下没有 `projects/` | 改成**含 `projects/` 的那个目录** |
+| 客户端里看不到任何 `ideasprout` 工具 | 配置文件位置写错，或没重启 / 没 Trust | 核对 §3 的路径；按 §4 生效 |
+| 工具在但调用报「找不到画布数据目录」 | `IDEASPROUT_DATA_DIR` 指向的目录下没有 `projects/` | 改成**含 `projects/` 的那个目录** |
 | `list_projects` 返回 `[]` | 目录对但没项目文件，或指向了空目录 | 在画布里新建/保存一个项目后重试 |
 | `generate` 报鉴权/网络错 | 没设 `DEEPSEEK_API_KEY` 或 key 无效 | 配 key；只要只读能力就把这条删掉 |
 | 读到的是旧内容 | server 读的是**磁盘上的项目文件**，不是画布内存态 | 在画布里执行「保存」再读 |
@@ -218,7 +218,7 @@ bash / zsh 用 `echo '...' | node ...` 同理。
 
 ## 7. 这个 server 提供什么（工具一览）
 
-server 名：`workbuddy-diverge`（版本 0.1.0）
+server 名：`workbuddy-ideasprout`（版本 0.1.0）
 
 | 工具 | 类型 | 入参 | 说明 |
 | --- | --- | --- | --- |
