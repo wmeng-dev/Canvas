@@ -222,12 +222,15 @@ function fileToGraph(file: ProjectFile): { nodes: CreativeNode[]; edges: Edge[] 
 }
 
 /**
- * 画布布局间距：节点卡片带标题 + 可行性 + 三行要点，比默认单行节点高得多，
- * 间距太近会重叠（卡片实测高度约 150px）。x 方向同理要给卡片宽度留余量。
+ * 画布布局间距：节点卡片是"标题 + 可行性 + 优点/缺点/风险**全部条目**"，
+ * 高度由内容决定但**有上界**（生成侧契约保证三组各 2~3 条、每条 ≤20 字，
+ * 见 IdeaNode 的 IDEA_NODE_MIN_HEIGHT / MAX_ITEMS_PER_GROUP），
+ * 实测统一最小高度 300px、最坏约 310px。间距按"卡片最高 + 留白"取 360，保证不重叠。
+ * x 方向要给卡片宽度（IDEA_NODE_WIDTH = 260）留余量。
  * ⚠️ Y 间距必须与主进程 core/generate-node.ts 的 SIBLING_SPACING_Y 保持一致。
  */
-export const ROOT_SPACING_Y = 200
-const CHILD_SPACING_Y = 200
+export const ROOT_SPACING_Y = 360
+const CHILD_SPACING_Y = 360
 const CHILD_SPACING_X = 320
 
 /** 新节点坐标：根层纵向排布；子节点在父节点右侧按兄弟序号展开。 */

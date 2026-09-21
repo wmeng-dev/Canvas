@@ -13,8 +13,12 @@ import type {
 import { mapWithConcurrencySettled } from './concurrency'
 
 export const MAX_GENERATE_COUNT = 5
-/** 同批子节点的纵向间距（与渲染端 computePosition 的基础间距保持一致） */
-const SIBLING_SPACING_Y = 200
+/**
+ * 同批子节点的纵向间距（与渲染端 treeStore.computePosition 的基础间距保持一致）。
+ * 卡片是"标题 + 可行性 + 优缺点风险全条目"，统一最小高度 300、最坏约 310 ⇒ 取 360 不重叠。
+ * ⚠️ 改这里必须同步改 treeStore 的 ROOT_SPACING_Y / CHILD_SPACING_Y，否则同批发散会叠在一起。
+ */
+const SIBLING_SPACING_Y = 360
 /** 并发上限：一次发散 N 条时同时打到后端的请求数 */
 export const GENERATE_CONCURRENCY = 2
 

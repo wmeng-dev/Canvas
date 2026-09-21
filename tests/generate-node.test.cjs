@@ -141,9 +141,9 @@ ok('ensureProject is idempotent')
     projectId, parentNodeId: rootId, prompt: '批量方向', count: 3, position: { x: 500, y: 100 },
   })
   assert.strictEqual(batch.items.length, 3)
-  // 间距须与渲染端 computePosition 一致（节点卡片变高，已从 150 调到 200）
+  // 间距须与渲染端 computePosition 一致（节点卡片变高，已从 150→200→360）
   assert.deepStrictEqual(batch.items.map((i) => i.node.position), [
-    { x: 500, y: 100 }, { x: 500, y: 300 }, { x: 500, y: 500 },
+    { x: 500, y: 100 }, { x: 500, y: 460 }, { x: 500, y: 820 },
   ])
   assert.deepStrictEqual(batch.items.map((i) => i.node.parentId), [rootId, rootId, rootId])
   assert.ok(batch.items.every((i, k) => i.edge && i.edge.source === rootId && i.edge.target === i.node.id))
