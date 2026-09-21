@@ -45,6 +45,20 @@ export interface NewVersionInput {
 }
 
 /**
+ * 向后兼容：老项目文件的评论带 `replies[]`（多人协作留下的回复线程）。
+ * 现在不做回复了，但**不能把用户写过的字凭空丢掉** —— 读取时把旧回复逐条并入正文，
+ * 并入后删掉 `replies` 字段，下次落盘即完成迁移。
+ */
+function migrateComment(t: CommentThread): void {
+  const legacy = (t as unknown as { replies?: { body?: string }[] }).replies
+  if (Array.isArray(legacy) && legacy.length > 0) {
+    const lines = legacy.map((r) => `回复：${String(r?.body ?? '').trim()}`).filter((l) => l !== '回复：')
+    if (lines.length > 0) t.body = [t.body, ...lines].filter(Boolean).join('\n')
+  }
+  delete (t as unknown as { replies?: unknown }).replies
+}
+
+/**
  * 向后兼容：早期版本的项目文件没有 content 类型 / 版本字段。
  * 就地补齐（仅内存，读时幂等；合成的首版 id 由 nodeId 派生，稳定可复现）。
  */
@@ -66,6 +80,7 @@ function migrateNode(n: TreeNode): void {
     n.currentVersionId = n.versions.length ? n.versions[n.versions.length - 1].id : null
   }
   if (!Array.isArray(n.comments)) n.comments = []
+  for (const t of n.comments) migrateComment(t)
   // 收展状态：旧文件没有该字段 → 默认展开（false）
   if (typeof n.collapsed !== 'boolean') n.collapsed = false
   // 归档状态：旧文件没有该字段 → 默认未归档
@@ -81,6 +96,7 @@ function migrateNode(n: TreeNode): void {
 /** 文件级（画布自由气泡）评论列表向后补齐 */
 function migrateComments(file: ProjectFile): void {
   if (!Array.isArray(file.comments)) file.comments = []
+  for (const t of file.comments) migrateComment(t)
   for (const n of file.tree.nodes) migrateNode(n)
 }
 
@@ -437,7 +453,6 @@ export class ProjectRepository {
       nodeId,
       body: String(body ?? '').trim(),
       createdAt: nowIso(),
-      replies: [],
     }
     node.comments.push(thread)
     file.project.updatedAt = nowIso()
@@ -454,7 +469,6 @@ export class ProjectRepository {
       position: { x, y },
       body: String(body ?? '').trim(),
       createdAt: nowIso(),
-      replies: [],
     }
     file.comments.push(thread)
     file.project.updatedAt = nowIso()
@@ -474,39 +488,12 @@ export class ProjectRepository {
     return thread
   }
 
-  /** 给某条 thread 追加一条回复，返回更新后的 thread */
-  addReply(projectId: string, threadId: string, body: string): CommentThread {
-    const file = this.get(projectId)
-    const loc = this.locateThread(file, threadId)
-    if (!loc) throw new Error(`Comment thread not found: ${threadId}`)
-    const thread = loc.container[loc.index]
-    thread.replies.push({
-      id: randomUUID(),
-      body: String(body ?? '').trim(),
-      createdAt: nowIso(),
-    })
-    file.project.updatedAt = nowIso()
-    this.store.write(projectId, file)
-    return thread
-  }
-
-  /** 删除整条 thread（含其回复） */
+  /** 删除一条评论；未知 id 静默跳过 */
   removeComment(projectId: string, threadId: string): void {
     const file = this.get(projectId)
     const loc = this.locateThread(file, threadId)
     if (!loc) return
     loc.container.splice(loc.index, 1)
-    file.project.updatedAt = nowIso()
-    this.store.write(projectId, file)
-  }
-
-  /** 删除 thread 里的某条回复 */
-  removeReply(projectId: string, threadId: string, replyId: string): void {
-    const file = this.get(projectId)
-    const loc = this.locateThread(file, threadId)
-    if (!loc) return
-    const thread = loc.container[loc.index]
-    thread.replies = thread.replies.filter((r) => r.id !== replyId)
     file.project.updatedAt = nowIso()
     this.store.write(projectId, file)
   }

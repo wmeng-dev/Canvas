@@ -145,7 +145,8 @@ export function IdeaNode({ id, data, selected, isConnectable }: NodeProps<Creati
   const addNodeComment = useTreeStore((s) => s.addNodeComment)
   const [newComment, setNewComment] = useState('')
   const commentOpen = activeCommentNodeId === id
-  const commentTotal = threads.reduce((acc, t) => acc + 1 + t.replies.length, 0)
+  // 一条评论就是一条（没有回复线程），条数 = 评论条数
+  const commentTotal = threads.length
 
   // --- 收展（折叠子树）：计数与动作都由画布算好/绑定好后随 data 下发 ---
   const childCount = data.childCount ?? 0

@@ -114,16 +114,9 @@ export interface TreeEdge {
 }
 
 /**
- * 一条评论回复（线程里的后续发言）。
- */
-export interface CommentReply {
-  id: string
-  body: string
-  createdAt: string
-}
-
-/**
- * 一个评论气泡 = 一条根评论 + 其回复线程。
+ * 一条评论（气泡）。
+ * ⚠️ 单人使用、非协作场景：**没有回复 / 线程机制** —— 一条就是一条，想补充就再写一条。
+ * 早期版本有 `replies[]`，已在读取时迁移（旧回复并入 body，字段本身删除）。
  * - 挂在创意节点上时带 `nodeId`、不带 `position`；
  * - 画布自由气泡时带 `position`（流坐标）、不带 `nodeId`。
  * 二者互斥：renderer 据此区分渲染/落盘位置。
@@ -134,10 +127,9 @@ export interface CommentThread {
   nodeId?: string
   /** 画布自由气泡的流坐标；nodeId 存在时不需要 */
   position?: { x: number; y: number }
-  /** 气泡里的第一条评论（根） */
+  /** 气泡正文 */
   body: string
   createdAt: string
-  replies: CommentReply[]
 }
 
 export interface ProjectFile {

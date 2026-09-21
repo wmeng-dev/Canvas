@@ -15,7 +15,7 @@ export function CommentNode({ id, data, selected }: NodeProps<CreativeNode>) {
 
   if (!thread) return null // 只会出现在错误用法下；防御一下
 
-  const count = 1 + thread.replies.length
+  // 一个气泡就是一条评论（不做回复线程），所以气泡上没有"条数"可显示。
   const active = activeThreadId === id
 
   return (
@@ -32,9 +32,7 @@ export function CommentNode({ id, data, selected }: NodeProps<CreativeNode>) {
       }}
     >
       <span className="comment-bubble-icon">💬</span>
-      <span className="comment-bubble-count" data-testid="comment-bubble-count">
-        {count}
-      </span>
+      {thread.body && <span className="comment-bubble-preview">{thread.body.slice(0, 12)}</span>}
       <NodeToolbar isVisible={active} position={Position.Right} offset={10}>
         <CommentThreadPopover thread={thread} />
       </NodeToolbar>

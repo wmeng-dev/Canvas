@@ -247,9 +247,7 @@ interface TreeState {
   /** 在画布流坐标创建自由气泡（body 为空，随后在弹层里填写）；成功后自动打开其弹层 */
   addCanvasComment: (pos: { x: number; y: number }) => Promise<boolean>
   updateCommentBody: (threadId: string, body: string) => Promise<boolean>
-  addReply: (threadId: string, body: string) => Promise<boolean>
   removeComment: (threadId: string) => Promise<boolean>
-  removeReply: (threadId: string, replyId: string) => Promise<boolean>
   /** 自由气泡拖动后回写坐标（静默失败只报错条） */
   updateCommentPosition: (threadId: string, x: number, y: number) => Promise<void>
   /** 打开/关闭某 idea 节点的评论弹层（互斥地关闭画布气泡弹层） */
@@ -1065,7 +1063,6 @@ const createdTreeStore = create<TreeState>((set, get) => {
         nodeId,
         body: text,
         createdAt: new Date().toISOString(),
-        replies: [],
       }
       set((s) => ({
         nodeComments: { ...s.nodeComments, [nodeId]: [...(s.nodeComments[nodeId] ?? []), thread] },
@@ -1095,7 +1092,6 @@ const createdTreeStore = create<TreeState>((set, get) => {
         position: pos,
         body: '',
         createdAt: new Date().toISOString(),
-        replies: [],
       }
       set((s) => ({ nodes: [...s.nodes, toCommentNode(thread)], activeThreadId: thread.id }))
       return true
@@ -1135,34 +1131,6 @@ const createdTreeStore = create<TreeState>((set, get) => {
     return true
   },
 
-  addReply: async (threadId, body) => {
-    const text = body.trim()
-    if (!text) return false
-    const { projectId } = get()
-    const api = window.diverge
-    if (api && projectId) {
-      try {
-        const t = await api.addReply({ projectId, threadId, body: text })
-        replaceThread(t)
-        set({ error: null })
-        return true
-      } catch (e) {
-        set({ error: `回复失败：${(e as Error).message}` })
-        return false
-      }
-    }
-    const cur = findThread(get(), threadId)
-    if (!cur) return false
-    replaceThread({
-      ...cur,
-      replies: [
-        ...cur.replies,
-        { id: `local-${Date.now()}`, body: text, createdAt: new Date().toISOString() },
-      ],
-    })
-    return true
-  },
-
   removeComment: async (threadId) => {
     const { projectId } = get()
     const api = window.diverge
@@ -1172,21 +1140,6 @@ const createdTreeStore = create<TreeState>((set, get) => {
         await api.removeComment({ projectId, threadId })
       } catch (e) {
         set({ error: `删除评论失败：${(e as Error).message}` })
-      }
-    }
-    return true
-  },
-
-  removeReply: async (threadId, replyId) => {
-    const { projectId } = get()
-    const api = window.diverge
-    const cur = findThread(get(), threadId)
-    if (cur) replaceThread({ ...cur, replies: cur.replies.filter((r) => r.id !== replyId) })
-    if (api && projectId) {
-      try {
-        await api.removeReply({ projectId, threadId, replyId })
-      } catch (e) {
-        set({ error: `删除回复失败：${(e as Error).message}` })
       }
     }
     return true

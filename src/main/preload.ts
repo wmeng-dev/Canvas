@@ -7,14 +7,12 @@ import type {
   AddCanvasCommentRequest,
   AddMcpServerRequest,
   AddNodeCommentRequest,
-  AddReplyRequest,
   DivergeApi,
   GenerateNodeRequest,
   OpenProjectResponse,
   RenameProjectRequest,
   RegenerateNodeRequest,
   RemoveCommentRequest,
-  RemoveReplyRequest,
   SaveExportRequest,
   SaveProjectAsRequest,
   SaveProjectRequest,
@@ -55,9 +53,7 @@ const api: DivergeApi = {
     ipcRenderer.invoke(IPC.addCanvasComment, req),
   updateCommentBody: (req: UpdateCommentBodyRequest) =>
     ipcRenderer.invoke(IPC.updateCommentBody, req),
-  addReply: (req: AddReplyRequest) => ipcRenderer.invoke(IPC.addReply, req),
   removeComment: (req: RemoveCommentRequest) => ipcRenderer.invoke(IPC.removeComment, req),
-  removeReply: (req: RemoveReplyRequest) => ipcRenderer.invoke(IPC.removeReply, req),
   updateCommentPosition: (req: UpdateCommentPositionRequest) =>
     ipcRenderer.invoke(IPC.updateCommentPosition, req),
 

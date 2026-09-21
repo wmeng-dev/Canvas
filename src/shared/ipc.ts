@@ -26,9 +26,7 @@ export const IPC = {
   addNodeComment: 'diverge:addNodeComment',
   addCanvasComment: 'diverge:addCanvasComment',
   updateCommentBody: 'diverge:updateCommentBody',
-  addReply: 'diverge:addReply',
   removeComment: 'diverge:removeComment',
-  removeReply: 'diverge:removeReply',
   updateCommentPosition: 'diverge:updateCommentPosition',
   generateNode: 'diverge:generateNode',
   generateProposal: 'diverge:generateProposal',
@@ -265,24 +263,10 @@ export interface UpdateCommentBodyRequest {
   body: string
 }
 
-/** 给某条 thread 追加回复 */
-export interface AddReplyRequest {
-  projectId: string
-  threadId: string
-  body: string
-}
-
-/** 删除整条 thread（含回复） */
+/** 删除一整条评论 */
 export interface RemoveCommentRequest {
   projectId: string
   threadId: string
-}
-
-/** 删除某条回复 */
-export interface RemoveReplyRequest {
-  projectId: string
-  threadId: string
-  replyId: string
 }
 
 /** 自由气泡拖动后回写流坐标 */
@@ -330,14 +314,10 @@ export interface DivergeApi {
   addNodeComment(req: AddNodeCommentRequest): Promise<CommentThread>
   /** 画布自由气泡；返回新建的 thread（body 可为空，随后 updateCommentBody 填写） */
   addCanvasComment(req: AddCanvasCommentRequest): Promise<CommentThread>
-  /** 改 thread 根评论；返回更新后的 thread */
+  /** 改评论正文；返回更新后的评论 */
   updateCommentBody(req: UpdateCommentBodyRequest): Promise<CommentThread>
-  /** 追加回复；返回更新后的 thread */
-  addReply(req: AddReplyRequest): Promise<CommentThread>
-  /** 删除整条 thread */
+  /** 删除一整条评论 */
   removeComment(req: RemoveCommentRequest): Promise<void>
-  /** 删除某条回复 */
-  removeReply(req: RemoveReplyRequest): Promise<void>
   /** 自由气泡拖动后回写坐标 */
   updateCommentPosition(req: UpdateCommentPositionRequest): Promise<void>
 

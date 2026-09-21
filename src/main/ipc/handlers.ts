@@ -8,12 +8,10 @@ import type {
   AddCanvasCommentRequest,
   AddMcpServerRequest,
   AddNodeCommentRequest,
-  AddReplyRequest,
   GenerateNodeRequest,
   OpenProjectResponse,
   RegenerateNodeRequest,
   RemoveCommentRequest,
-  RemoveReplyRequest,
   RenameProjectRequest,
   SaveExportRequest,
   SaveProjectAsRequest,
@@ -161,16 +159,8 @@ export function registerIpcHandlers(svc: AppServices): void {
     svc.repo.updateCommentBody(req.projectId, req.threadId, String(req.body ?? '')),
   )
 
-  ipcMain.handle(IPC.addReply, (_evt, req: AddReplyRequest) =>
-    svc.repo.addReply(req.projectId, req.threadId, String(req.body ?? '')),
-  )
-
   ipcMain.handle(IPC.removeComment, (_evt, req: RemoveCommentRequest) =>
     svc.repo.removeComment(req.projectId, req.threadId),
-  )
-
-  ipcMain.handle(IPC.removeReply, (_evt, req: RemoveReplyRequest) =>
-    svc.repo.removeReply(req.projectId, req.threadId, req.replyId),
   )
 
   ipcMain.handle(IPC.updateCommentPosition, (_evt, req: UpdateCommentPositionRequest) =>
