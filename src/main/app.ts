@@ -1,7 +1,7 @@
 // C.3 主进程装配：服务(存储+生成器) → IPC handlers → 窗口(preload)。
 // 拆出可复用函数，main.ts 只负责调用 bootstrap()。
 
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu } from 'electron'
 import * as path from 'path'
 import * as http from 'http'
 import { createServices } from '../core/services'
@@ -97,6 +97,16 @@ export function createMainWindow(): BrowserWindow {
 
 export function bootstrap(): void {
   app.whenReady().then(() => {
+    // 不要系统默认菜单（File / Edit / View / Window / Help）：那是 Electron 在 dev 下
+    // 露出来的"开发者残影"（含 Reload / Toggle Developer Tools / About 等），产品里显得业余。
+    // Windows/Linux 上把应用菜单设成 null 即可让顶部菜单栏消失。
+    // ⚠️ macOS 不能整条拿掉（App 菜单是系统规范、且拿掉后应用行为异常），
+    // 所以只在非 darwin 平台设 null；mac 上保持默认即可。
+    // ⚠️ 副作用：默认菜单绑定的快捷键（Ctrl+Shift+I 开 DevTools、Ctrl+R 重载等）
+    // 会一并消失；但输入框内的复制/粘贴/撤销由 Chromium 原生处理，与菜单无关，不受影响。
+    // ⚠️ 必须在 ready 之后调用（Menu API 在 ready 前不可用）。
+    if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
+
     // 服务必须在 ready 之后装配：safeStorage 等 Electron API 在 ready 前不可用，
     // 过早构造会让密钥封装误判为"无加密能力"而悄悄降级为明文（见 secret-box.ts）。
     const services = createAppServices()
