@@ -37,6 +37,11 @@ files:
   - dist/renderer/**/*
   - package.json
   - "!**/*.map"
+  # 第三方依赖里夹带的源码 / 示例 / 文档 —— 运行时不需要，一并剔除，别打进安装包
+  # （ajv 会把 lib/*.ts 一起发布；MCP SDK 里有 examples/server/*demo*.js 这类样例服务）
+  - "!node_modules/**/*.ts"
+  - "!node_modules/**/examples/**"
+  - "!node_modules/**/*.md"
 
 # 纯 JS，无原生模块 → 不需要 rebuild
 npmRebuild: false
