@@ -58,3 +58,37 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: 发散创意画布
   artifactName: Diverge-${version}-win-${arch}-setup.${ext}
+
+# ---------- macOS ----------
+# ⚠️ 跨平台限制：**dmg / pkg 只能在 macOS 上构建**（electron-builder 需要 macOS 的
+#    codesign / dmg 工具链）。Windows 机器上跑 --mac 会失败，属正常现象，不是配置问题。
+#    要出 macOS 安装包，两条路：
+#      ① 在 Mac 上：node scripts/dist.cjs --mac
+#      ② 用 CI：见 .github/workflows/build.yml（macos-latest 跑 --mac，产物在 Actions 里下载）
+# 未签名的包在 macOS 上会被 Gatekeeper 拦（"无法验证开发者"）→ 用户需右键 → 打开。
+# 有 Apple 开发者证书时设 CSC_NAME / CSC_LINK 即可自动签名（本配置默认不签）。
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.icns
+  category: public.app-category.productivity
+  darkModeSupport: true
+  identity: null
+  artifactName: Diverge-${version}-mac-${arch}.${ext}
+
+dmg:
+  artifactName: Diverge-${version}-mac-${arch}-installer.${ext}
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications

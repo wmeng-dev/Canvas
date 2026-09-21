@@ -1,8 +1,11 @@
-// 生成应用图标（build/icon.ico）。
-// 用 Node 纯手写 PNG/ICO 编码，不引入图像库 —— 与项目「纯 JS 技术栈」一致，且图标可复现。
+// 生成应用图标（build/icon.ico + build/icon.icns）。
+// 用 Node 纯手写 PNG/ICO/ICNS 编码，不引入图像库 —— 与项目「纯 JS 技术栈」一致，且图标可复现。
 // 用法：node scripts/make-icon.cjs
 //
 // 图形：深色圆角底 + 一个中心节点向两个子节点发散（呼应"发散创意画布"）。
+//
+// macOS（.icns）自 10.7 起支持在容器里直接放 PNG 条目（ic07~ic14），
+// 因此不必实现 JP2 编码：按尺寸选对应的 PNG 类型即可。
 
 const fs = require('fs')
 const path = require('path')
@@ -51,8 +54,10 @@ function sdSegment(px, py, x0, y0, x1, y1) {
 /**
  * 渲染一张 size×size 的 RGBA 图（带超采样抗锯齿）。
  * 内部用「预乘 alpha」的浮点缓冲，便于叠加与降采样。
+ * `ss` 可单独指定：512/1024 这种大尺寸再乘 4 倍超采样，内存会爆（N² × 7 个 Float32 数组），
+ * 所以大尺寸用更小的超采样倍数。
  */
-function render(size) {
+function render(size, ss = SS) {
   const N = size * SS
   const a = new Float32Array(N * N)
   const r = new Float32Array(N * N)
@@ -223,6 +228,24 @@ function encodeIco(images) {
   return Buffer.concat([header, ...entries, ...images.map((i) => i.png)])
 }
 
+// ---------- ICNS 编码（macOS）：容器头 + 若干「类型 + 长度 + PNG」条目 ----------
+/** 尺寸 → ICNS 的 PNG 条目类型（ic11/ic12 是 @2x 的小图，ic07~ic10 是大图） */
+const ICNS_PNG_TYPE = { 32: 'ic11', 64: 'ic12', 128: 'ic07', 256: 'ic08', 512: 'ic09', 1024: 'ic10' }
+
+function encodeIcns(images) {
+  const entries = images.map(({ size, png }) => {
+    const type = Buffer.from(ICNS_PNG_TYPE[size], 'ascii')
+    const len = Buffer.alloc(4)
+    len.writeUInt32BE(png.length + 8, 0) // 长度含自身的 8 字节头
+    return Buffer.concat([type, len, png])
+  })
+  const body = Buffer.concat(entries)
+  const header = Buffer.alloc(8)
+  header.write('icns', 0, 'ascii')
+  header.writeUInt32BE(body.length + 8, 4)
+  return Buffer.concat([header, body])
+}
+
 // ---------- 主流程 ----------
 fs.mkdirSync(OUT_DIR, { recursive: true })
 
@@ -233,5 +256,15 @@ fs.writeFileSync(path.join(OUT_DIR, 'icon.ico'), ico)
 // 附带一张 256 的 PNG，方便非 Windows 平台/README 使用
 fs.writeFileSync(path.join(OUT_DIR, 'icon.png'), images[images.length - 1].png)
 
+// macOS 图标：32~512 的 PNG 条目（512 用 2 倍超采样，避免 2048² × 7 个缓冲把内存吃满）
+const MAC_SIZES = [32, 64, 128, 256, 512]
+const macImages = MAC_SIZES.map((size) => ({
+  size,
+  png: encodePng(render(size, size >= 512 ? 2 : SS), size),
+}))
+const icns = encodeIcns(macImages)
+fs.writeFileSync(path.join(OUT_DIR, 'icon.icns'), icns)
+
 console.log(`icon.ico written (${SIZES.join(', ')} px, ${ico.length} bytes)`)
 console.log('icon.png written (256 px)')
+console.log(`icon.icns written (${MAC_SIZES.join(', ')} px, ${icns.length} bytes)`)

@@ -6,6 +6,8 @@ dist-electron/
 dist-test/
 # electron-builder output (installer / unpacked app)
 release/
+# 临时输出目录（release/win-unpacked 被占用时的绕开目录，见 electron-builder.yml）
+release-tmp/
 # WorkBuddy project data (personal config, do NOT commit)
 .workbuddy/
 # Local data / secrets
