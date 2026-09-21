@@ -220,6 +220,123 @@ body {
   color: #fff;
 }
 
+/* 想法回收站：画布底部居中的固定覆盖层（不随画布平移/缩放） */
+.trash-bin {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+.trash-bin__bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid #30363d;
+  background: #161b22;
+  color: #e6edf3;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.12s, background 0.12s, transform 0.12s;
+}
+.trash-bin__bar:hover {
+  border-color: #8b949e;
+}
+/* 拖拽悬停：整块放大 + 变红，明确"松手就归档" */
+.trash-bin--hot .trash-bin__bar {
+  border-color: #f85149;
+  background: #2d1416;
+  transform: scale(1.08);
+}
+.trash-bin__icon {
+  font-size: 13px;
+}
+.trash-bin__count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #30363d;
+  color: #e6edf3;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+.trash-bin--hot .trash-bin__count {
+  background: #f85149;
+  color: #fff;
+}
+.trash-bin__caret {
+  color: #8b949e;
+  font-size: 10px;
+}
+.trash-bin__panel {
+  width: 260px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 7px;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  background: #161b22;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+.trash-bin__empty {
+  padding: 8px 6px;
+  color: #8b949e;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.trash-bin__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trash-bin__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 4px 5px 6px;
+  border-radius: 6px;
+}
+.trash-bin__item + .trash-bin__item {
+  border-top: 1px solid #21262d;
+}
+.trash-bin__item:hover {
+  background: #1f242c;
+}
+.trash-bin__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #e6edf3;
+  font-size: 12px;
+}
+.trash-bin__restore {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  background: #21262d;
+  color: #e6edf3;
+  font-size: 11px;
+  cursor: pointer;
+}
+.trash-bin__restore:hover {
+  border-color: #1f6feb;
+  background: #1f6feb;
+  color: #fff;
+}
+
 /* 画布自由气泡（type 'comment' 的节点本体） */
 .comment-bubble {
   display: flex;

@@ -87,6 +87,12 @@ export interface TreeNode {
    * 旧项目文件没有这个字段 → 读时由 migrateNode 兜底为 false（默认展开）。
    */
   collapsed?: boolean
+  /**
+   * 该节点是否已被"归档"到想法回收站。
+   * 与 collapsed 的区别：归档后**自身也隐藏**（收起只是藏后代、自身仍可见），
+   * 归档节点可从回收站取出还原。旧项目文件读时由 migrateNode 兜底为 false。
+   */
+  archived?: boolean
   createdAt: string
   updatedAt: string
 }

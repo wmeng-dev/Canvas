@@ -7,7 +7,8 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import type { AddMcpServerRequest, GeneratorInfo } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
-import type { CollapsibleNode } from '../../shared/tree'
+import { collectAncestorIds, collectDescendantIds } from '../../shared/tree'
+import type { VisibilityNode } from '../../shared/tree'
 import type {
   CommentThread,
   ContentType,
@@ -89,6 +90,11 @@ export interface CreativeNodeData extends Record<string, unknown> {
   descendantCount?: number
   /** 收展动作同样由画布下发：卡片只消费画布给的事实（计数 + 动作），不自己再订阅一份。 */
   onToggleCollapse?: (nodeId: string) => void
+  /**
+   * 该节点是否已"归档"进想法回收站（归档后自身**连同后代**一起从画布隐藏）。
+   * 落盘在 TreeNode.archived → 下次打开仍在回收站里。
+   */
+  archived?: boolean
 }
 
 export type CreativeNode = Node<CreativeNodeData>
@@ -188,6 +194,10 @@ interface TreeState {
   setVersion: (nodeId: string, versionId: string) => Promise<void>
   /** 收起/展开节点（隐藏/显示其全部后代）：本地先切让画布立刻响应，再落库；落库失败回滚 */
   toggleCollapse: (nodeId: string) => Promise<void>
+  /** 归档进回收站：只标自身（后代跟着隐藏，但自身标记不动，取出祖先时自然回来） */
+  archiveNode: (nodeId: string) => Promise<void>
+  /** 从回收站取出：自身**连同被归档的祖先**一起取消标记，否则取出来仍被祖先挡着看不见 */
+  restoreNode: (nodeId: string) => Promise<void>
 
   // --- C.6 AI 后端设置 ---
   openAi: () => void
@@ -253,6 +263,7 @@ function toCreativeNode(n: TreeNode, index: number): CreativeNode {
       versions: n.versions ?? [],
       currentVersionId: n.currentVersionId ?? null,
       collapsed: n.collapsed ?? false,
+      archived: n.archived ?? false,
     },
   }
 }
@@ -275,6 +286,7 @@ function mergeNode(nodes: CreativeNode[], updated: TreeNode): CreativeNode[] {
             currentVersionId: updated.currentVersionId ?? null,
             // 收展状态也跟随落库值；服务端万一没带（老文件）就保留本地现状，避免"重新生成后树意外展开"
             collapsed: updated.collapsed ?? n.data.collapsed ?? false,
+            archived: updated.archived ?? n.data.archived ?? false,
           },
         }
       : n,
@@ -336,12 +348,17 @@ export function computePosition(
 }
 
 /**
- * 画布节点 → 收展计算用的最小形状。
- * shared/tree 的纯函数只认 `{ id, parentId, collapsed }`，而画布节点把这两个字段
- * 放在 `data` 里 —— 适配在这里做一次，避免两个调用点各自拼结构。
+ * 画布节点 → 可见性计算用的最小形状。
+ * shared/tree 的纯函数只认 `{ id, parentId, collapsed, archived }`，而画布节点把这些字段
+ * 放在 `data` 里 —— 适配在这里做一次，避免多个调用点各自拼结构。
  */
-export function toCollapsibleNode(n: CreativeNode): CollapsibleNode {
-  return { id: n.id, parentId: n.data.parentId ?? null, collapsed: n.data.collapsed ?? false }
+export function toVisibilityNode(n: CreativeNode): VisibilityNode {
+  return {
+    id: n.id,
+    parentId: n.data.parentId ?? null,
+    collapsed: n.data.collapsed ?? false,
+    archived: n.data.archived ?? false,
+  }
 }
 
 /** 在状态里按 id 找一条评论 thread（先查节点级映射，再查画布气泡节点）。 */
@@ -748,7 +765,49 @@ const createdTreeStore = create<TreeState>((set, get) => {
     }
   },
 
-  // ---------------- C.6 AI 后端设置 ----------------
+  // ---------------- 想法回收站（归档 / 取出） ----------------
+  archiveNode: async (nodeId) => {
+    const { nodes, projectId } = get()
+    const target = nodes.find((n) => n.id === nodeId)
+    if (!target || target.data.archived) return
+    const prev = nodes
+    // 归档后该节点连同后代一起从画布消失；若当前预览的正是它们之一，清空选中避免预览一个看不见的节点
+    const gone = new Set<string>([nodeId, ...collectDescendantIds(nodes.map(toVisibilityNode), nodeId)])
+    set({
+      nodes: nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, archived: true } } : n)),
+      selectedNodeId: gone.has(get().selectedNodeId ?? '') ? null : get().selectedNodeId,
+    })
+    const api = window.diverge
+    if (!api || !projectId) return
+    try {
+      await api.setNodeArchived({ projectId, nodeIds: [nodeId], archived: true })
+    } catch (e) {
+      set({ nodes: prev, error: `归档失败：${(e as Error).message}` })
+    }
+  },
+
+  restoreNode: async (nodeId) => {
+    const { nodes, projectId } = get()
+    const vis = nodes.map(toVisibilityNode)
+    // 取出要连带祖先：只取消自己，若祖上还有归档项，取出来照样看不见
+    const ids = [nodeId, ...collectAncestorIds(vis, nodeId).filter((id) => vis.find((v) => v.id === id)?.archived)]
+    const prev = nodes
+    const idSet = new Set(ids)
+    set({
+      nodes: nodes.map((n) =>
+        idSet.has(n.id) ? { ...n, data: { ...n.data, archived: false } } : n,
+      ),
+      selectedNodeId: nodeId,
+    })
+    const api = window.diverge
+    if (!api || !projectId) return
+    try {
+      await api.setNodeArchived({ projectId, nodeIds: ids, archived: false })
+    } catch (e) {
+      set({ nodes: prev, error: `取出失败：${(e as Error).message}` })
+    }
+  },
+
   openAi: () => {
     set({ aiOpen: true })
     void get().loadAiSettings()

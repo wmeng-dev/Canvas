@@ -28,6 +28,7 @@ export const IPC = {
   updateNodePrompt: 'diverge:updateNodePrompt',
   setNodeVersion: 'diverge:setNodeVersion',
   setNodeCollapsed: 'diverge:setNodeCollapsed',
+  setNodeArchived: 'diverge:setNodeArchived',
   getAiSettings: 'diverge:getAiSettings',
   setDeepSeekKey: 'diverge:setDeepSeekKey',
   clearDeepSeekKey: 'diverge:clearDeepSeekKey',
@@ -99,6 +100,18 @@ export interface SetNodeCollapsedRequest {
   nodeId: string
   /** true = 收起（隐藏全部后代）；false = 展开 */
   collapsed: boolean
+}
+
+/**
+ * 归档 / 取出（想法回收站）。
+ * 做成**批量**而不是单个：取出时要一次性把目标节点**连同它被归档的祖先**一起取消标记，
+ * 拆成多次调用会出现"中间态"（祖先已取出、自己还没）在画布上闪一下。
+ */
+export interface SetNodeArchivedRequest {
+  projectId: string
+  nodeIds: string[]
+  /** true = 归档进回收站；false = 取出回画布 */
+  archived: boolean
 }
 
 export interface SetNodeVersionRequest {
@@ -244,6 +257,8 @@ export interface DivergeApi {
   setNodeVersion(req: SetNodeVersionRequest): Promise<TreeNode>
   /** 收起/展开节点（隐藏/显示其全部后代），返回更新后的节点 */
   setNodeCollapsed(req: SetNodeCollapsedRequest): Promise<TreeNode>
+  /** 归档/取出；返回实际被改动的节点（未知 id 会被静默跳过） */
+  setNodeArchived(req: SetNodeArchivedRequest): Promise<TreeNode[]>
 
   // --- 评论（气泡）：节点级 + 画布自由气泡 ---
   /** 给节点加评论气泡；返回新建的 thread */

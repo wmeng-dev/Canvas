@@ -3,7 +3,7 @@
 // 缩略图（MiniMap）做「快速定位」：拖拽平移 + 滚轮缩放 + 单击跳转。
 // D.7 节点用自定义组件 IdeaNode（结果标题 + 可行性 + 优缺点风险）。
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   Controls,
@@ -16,13 +16,29 @@ import {
 import type { NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { CreativeNode } from '../store/treeStore'
-import { toCollapsibleNode, useTreeStore } from '../store/treeStore'
+import { toVisibilityNode, useTreeStore } from '../store/treeStore'
 import { IdeaNode } from './IdeaNode'
 import { CommentNode } from './CommentNode'
+import { TrashBin } from './TrashBin'
 import { collectDescendantIds, collectHiddenIds } from '../../shared/tree'
 
 /** 判定"这是拖拽而不是点击"的位移阈值（px） */
 const CLICK_DRAG_TOLERANCE = 4
+
+/**
+ * 从 React Flow 的拖拽事件里取光标位置。
+ * ⚠️ 库把事件类型标成 `MouseEvent | TouchEvent`（触屏拖拽走 TouchEvent），
+ * 直接读 `evt.clientX` 过不了类型；触屏取第一个触点即可满足命中判定。
+ */
+function clientPointOf(evt: { clientX?: number; clientY?: number } | TouchEvent): { x: number; y: number } | null {
+  const anyEvt = evt as { clientX?: number; clientY?: number; touches?: TouchList }
+  const touch = anyEvt.touches?.[0]
+  if (touch) return { x: touch.clientX, y: touch.clientY }
+  if (typeof anyEvt.clientX === 'number' && typeof anyEvt.clientY === 'number') {
+    return { x: anyEvt.clientX, y: anyEvt.clientY }
+  }
+  return null
+}
 
 /** 兜底重测的最大重试次数与间隔（上界很小，避免长命定时器和库自己的测量抢主线程） */
 const MEASURE_RETRY_MAX = 12
@@ -53,6 +69,17 @@ export function CreativeTree() {
   const setActiveThread = useTreeStore((s) => s.setActiveThread)
   const togglePlacingComment = useTreeStore((s) => s.togglePlacingComment)
   const toggleCollapse = useTreeStore((s) => s.toggleCollapse)
+  // 想法回收站：拖入归档 / 取出
+  const archiveNode = useTreeStore((s) => s.archiveNode)
+  const [dragOverTrash, setDragOverTrash] = useState(false)
+
+  /** 光标是否落在回收站上（用 DOM 矩形判定：回收站是画布上的固定覆盖层，与画布缩放无关） */
+  const hitTrash = useCallback((clientX: number, clientY: number): boolean => {
+    const el = document.querySelector('[data-testid="trash-bin"]')
+    if (!el) return false
+    const r = el.getBoundingClientRect()
+    return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom
+  }, [])
 
   /**
    * 收展后的"可见集"：被收起节点的**全部后代**隐藏，通向它们的边也一并去掉
@@ -60,7 +87,7 @@ export function CreativeTree() {
    * 没有任何收起节点时直接复用原数组 —— 保持引用稳定，别让 React Flow 每帧白重算。
    */
   const { visibleNodes, visibleEdges } = useMemo(() => {
-    const collapsible = nodes.map(toCollapsibleNode)
+    const collapsible = nodes.map(toVisibilityNode)
     const hidden = collectHiddenIds(collapsible)
 
     // 每个节点的"直接子节点数"（决定要不要显示收展开关）与"后代总数"（收起时的 +N）
@@ -259,11 +286,26 @@ export function CreativeTree() {
           selectNode(node.id)
           openMenu(node.id, e.clientX, e.clientY)
         }}
-        onNodeDragStop={(_, node) => {
+        onNodeDrag={(evt, node) => {
+          if (node.type === 'comment') return
+          const p = clientPointOf(evt)
+          if (!p) return
+          const over = hitTrash(p.x, p.y)
+          if (over !== dragOverTrash) setDragOverTrash(over)
+        }}
+        onNodeDragStop={(evt, node, dragged) => {
           // 自由气泡拖完把流坐标写回项目文件（普通 idea 节点的拖拽位置本就不落盘，行为一致地不管）
           if (node.type === 'comment') {
             void updateCommentPosition(node.id, node.position.x, node.position.y)
+            return
           }
+          // 想法回收站：拖到回收站上松手 = 归档（多选拖动时整批归档）
+          const p = clientPointOf(evt)
+          const over = p ? hitTrash(p.x, p.y) : false
+          setDragOverTrash(false)
+          if (!over) return
+          const batch = (dragged ?? [node]).filter((n) => n.type !== 'comment')
+          for (const n of batch) void archiveNode(n.id)
         }}
         onPaneClick={(e) => {
           closeMenu()
@@ -293,6 +335,8 @@ export function CreativeTree() {
         */}
         <MiniMap pannable zoomable onClick={onMinimapClick} />
       </ReactFlow>
+      {/* 想法回收站：画布上的固定覆盖层（不随画布平移/缩放），拖入归档、点开取出 */}
+      <TrashBin highlight={dragOverTrash} />
     </div>
   )
 }

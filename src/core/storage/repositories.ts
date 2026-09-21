@@ -66,6 +66,8 @@ function migrateNode(n: TreeNode): void {
   if (!Array.isArray(n.comments)) n.comments = []
   // 收展状态：旧文件没有该字段 → 默认展开（false）
   if (typeof n.collapsed !== 'boolean') n.collapsed = false
+  // 归档状态：旧文件没有该字段 → 默认未归档
+  if (typeof n.archived !== 'boolean') n.archived = false
 }
 
 /** 文件级（画布自由气泡）评论列表向后补齐 */
@@ -327,6 +329,29 @@ export class ProjectRepository {
     file.project.updatedAt = node.updatedAt
     this.store.write(projectId, file)
     return node
+  }
+
+  /**
+   * 批量设置归档状态（想法回收站）。
+   * ⚠️ 只改传进来的这些节点：**归档一个节点时不连带标记它的后代** ——
+   * 后代只是因为"祖先被归档"而在画布上隐藏，自身标记保持原样，取出祖先时它们自然回来。
+   * 反过来，**取出时调用方要把祖先一并传进来**，否则取出来仍被祖先的归档状态挡着看不见。
+   * 未知 id 跳过（批量恢复时祖先可能已被删除），不因个别缺失让整批失败。
+   */
+  setNodesArchived(projectId: string, nodeIds: string[], archived: boolean): TreeNode[] {
+    const file = this.get(projectId)
+    const ts = nowIso()
+    const updated: TreeNode[] = []
+    for (const id of nodeIds) {
+      const node = file.tree.nodes.find((n) => n.id === id)
+      if (!node) continue
+      node.archived = !!archived
+      node.updatedAt = ts
+      updated.push(node)
+    }
+    file.project.updatedAt = ts
+    this.store.write(projectId, file)
+    return updated
   }
 
   // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------

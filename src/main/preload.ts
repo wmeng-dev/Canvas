@@ -18,6 +18,7 @@ import type {
   SaveExportRequest,
   SaveProjectAsRequest,
   SaveProjectRequest,
+  SetNodeArchivedRequest,
   SetNodeCollapsedRequest,
   SetNodeVersionRequest,
   UpdateCommentBodyRequest,
@@ -38,6 +39,7 @@ const api: DivergeApi = {
     ipcRenderer.invoke(IPC.updateNodePrompt, req),
   setNodeVersion: (req: SetNodeVersionRequest) => ipcRenderer.invoke(IPC.setNodeVersion, req),
   setNodeCollapsed: (req: SetNodeCollapsedRequest) => ipcRenderer.invoke(IPC.setNodeCollapsed, req),
+  setNodeArchived: (req: SetNodeArchivedRequest) => ipcRenderer.invoke(IPC.setNodeArchived, req),
 
   addNodeComment: (req: AddNodeCommentRequest) => ipcRenderer.invoke(IPC.addNodeComment, req),
   addCanvasComment: (req: AddCanvasCommentRequest) =>
