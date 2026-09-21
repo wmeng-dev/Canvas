@@ -64,6 +64,8 @@ function migrateNode(n: TreeNode): void {
     n.currentVersionId = n.versions.length ? n.versions[n.versions.length - 1].id : null
   }
   if (!Array.isArray(n.comments)) n.comments = []
+  // 收展状态：旧文件没有该字段 → 默认展开（false）
+  if (typeof n.collapsed !== 'boolean') n.collapsed = false
 }
 
 /** 文件级（画布自由气泡）评论列表向后补齐 */
@@ -169,6 +171,7 @@ export class ProjectRepository {
       versions: [],
       currentVersionId: null,
       position: input.position,
+      collapsed: input.collapsed ?? false,
       createdAt: ts,
       updatedAt: ts,
     }
@@ -307,6 +310,23 @@ export class ProjectRepository {
     )
     file.project.updatedAt = nowIso()
     this.store.write(projectId, file)
+  }
+
+  // ---------- 收展（折叠子树） ----------
+  /**
+   * 设置某节点的收展状态。
+   * ⚠️ 只改这一个节点的标记 —— 后代的 collapsed 各自独立保留，
+   * 于是"收起 A → 展开 A"后，A 的后代里原本就是收起的那些仍保持收起（符合直觉的树行为）。
+   */
+  setNodeCollapsed(projectId: string, nodeId: string, collapsed: boolean): TreeNode {
+    const file = this.get(projectId)
+    const node = file.tree.nodes.find((n) => n.id === nodeId)
+    if (!node) throw new Error(`Node not found: ${nodeId}`)
+    node.collapsed = !!collapsed
+    node.updatedAt = nowIso()
+    file.project.updatedAt = node.updatedAt
+    this.store.write(projectId, file)
+    return node
   }
 
   // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------

@@ -7,6 +7,7 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import type { AddMcpServerRequest, GeneratorInfo } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
+import type { CollapsibleNode } from '../../shared/tree'
 import type {
   CommentThread,
   ContentType,
@@ -75,6 +76,19 @@ export interface CreativeNodeData extends Record<string, unknown> {
    * idea 节点不带（节点级评论走 store 的 nodeComments 映射）。
    */
   thread?: CommentThread
+  /**
+   * 该节点是否"收起"（收起后其**全部后代**在画布上隐藏，自身仍可见）。
+   * 落盘在 TreeNode.collapsed → 下次打开保持收展状态。
+   */
+  collapsed?: boolean
+  /**
+   * 收展开关用的两个派生计数，**由画布（CreativeTree）算好后随 data 下发**。
+   * "谁是谁的子节点"是画布拓扑事实，放在画布一处算，卡片与画布看到的就是同一份。
+   */
+  childCount?: number
+  descendantCount?: number
+  /** 收展动作同样由画布下发：卡片只消费画布给的事实（计数 + 动作），不自己再订阅一份。 */
+  onToggleCollapse?: (nodeId: string) => void
 }
 
 export type CreativeNode = Node<CreativeNodeData>
@@ -172,6 +186,8 @@ interface TreeState {
   /** 只保存描述、不生成（"不生成"那条路） */
   savePrompt: (nodeId: string, prompt: string) => Promise<void>
   setVersion: (nodeId: string, versionId: string) => Promise<void>
+  /** 收起/展开节点（隐藏/显示其全部后代）：本地先切让画布立刻响应，再落库；落库失败回滚 */
+  toggleCollapse: (nodeId: string) => Promise<void>
 
   // --- C.6 AI 后端设置 ---
   openAi: () => void
@@ -236,6 +252,7 @@ function toCreativeNode(n: TreeNode, index: number): CreativeNode {
       parentId: n.parentId,
       versions: n.versions ?? [],
       currentVersionId: n.currentVersionId ?? null,
+      collapsed: n.collapsed ?? false,
     },
   }
 }
@@ -256,6 +273,8 @@ function mergeNode(nodes: CreativeNode[], updated: TreeNode): CreativeNode[] {
             prompt: updated.prompt,
             versions: updated.versions ?? [],
             currentVersionId: updated.currentVersionId ?? null,
+            // 收展状态也跟随落库值；服务端万一没带（老文件）就保留本地现状，避免"重新生成后树意外展开"
+            collapsed: updated.collapsed ?? n.data.collapsed ?? false,
           },
         }
       : n,
@@ -316,6 +335,15 @@ export function computePosition(
   return { x: parent.position.x + CHILD_SPACING_X, y: parent.position.y + siblings * CHILD_SPACING_Y }
 }
 
+/**
+ * 画布节点 → 收展计算用的最小形状。
+ * shared/tree 的纯函数只认 `{ id, parentId, collapsed }`，而画布节点把这两个字段
+ * 放在 `data` 里 —— 适配在这里做一次，避免两个调用点各自拼结构。
+ */
+export function toCollapsibleNode(n: CreativeNode): CollapsibleNode {
+  return { id: n.id, parentId: n.data.parentId ?? null, collapsed: n.data.collapsed ?? false }
+}
+
 /** 在状态里按 id 找一条评论 thread（先查节点级映射，再查画布气泡节点）。 */
 function findThread(
   state: { nodeComments: Record<string, CommentThread[]>; nodes: CreativeNode[] },
@@ -331,7 +359,7 @@ function findThread(
   return null
 }
 
-export const useTreeStore = create<TreeState>((set, get) => {
+const createdTreeStore = create<TreeState>((set, get) => {
   /**
    * 把某条 thread 的最新内容写回状态：先找节点级评论（nodeComments 映射），
    * 再找画布气泡节点（nodes 里 type==='comment'）。两处互斥，命中即返回。
@@ -541,6 +569,17 @@ export const useTreeStore = create<TreeState>((set, get) => {
     const { dialogParentId, nodes, projectId } = get()
     const siblings = nodes.filter((n) => (n.data.parentId ?? null) === dialogParentId).length
     const position = computePosition(nodes, dialogParentId, siblings)
+    // 父节点原本是收起的 → 生成成功后自动展开它：
+    // 否则新生成的子节点会立刻被父节点的收起状态藏起来，用户会以为"生成没生效"。
+    const parentWasCollapsed = dialogParentId
+      ? (nodes.find((n) => n.id === dialogParentId)?.data.collapsed ?? false)
+      : false
+    const expandParent = (list: CreativeNode[]) =>
+      parentWasCollapsed && dialogParentId
+        ? list.map((n) =>
+            n.id === dialogParentId ? { ...n, data: { ...n.data, collapsed: false } } : n,
+          )
+        : list
     set({ generating: true, error: null, warning: null, menu: null })
 
     const api = window.diverge
@@ -566,7 +605,7 @@ export const useTreeStore = create<TreeState>((set, get) => {
           }
         })
         set((s) => ({
-          nodes: [...s.nodes, ...created],
+          nodes: expandParent([...s.nodes, ...created]),
           edges: [
             ...s.edges,
             ...(dialogParentId
@@ -595,9 +634,13 @@ export const useTreeStore = create<TreeState>((set, get) => {
         count,
         position,
       })
+      // 父节点原本收起 → 一并落库为展开，避免刷新后又收回去（本地改动已在 expandParent 里做）
+      if (parentWasCollapsed && dialogParentId) {
+        await api.setNodeCollapsed({ projectId, nodeId: dialogParentId, collapsed: false })
+      }
       const created = res.items.map((it, i) => toCreativeNode(it.node, i))
       set((s) => ({
-        nodes: [...s.nodes, ...created],
+        nodes: expandParent([...s.nodes, ...created]),
         edges: [
           ...s.edges,
           ...res.items
@@ -683,6 +726,25 @@ export const useTreeStore = create<TreeState>((set, get) => {
       set((s) => ({ nodes: mergeNode(s.nodes, updated), selectedNodeId: nodeId, error: null }))
     } catch (e) {
       set({ error: `翻案失败：${(e as Error).message}` })
+    }
+  },
+
+  toggleCollapse: async (nodeId) => {
+    const { nodes, projectId } = get()
+    const target = nodes.find((n) => n.id === nodeId)
+    if (!target) return
+    const prev = target.data.collapsed ?? false
+    const next = !prev
+    const apply = (list: CreativeNode[], v: boolean) =>
+      list.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, collapsed: v } } : n))
+    // 乐观更新：先切本地让画布立刻收展，再落库；落库失败回滚到原状态
+    set({ nodes: apply(nodes, next) })
+    const api = window.diverge
+    if (!api || !projectId) return // 无主进程（纯浏览器预览）：仅本地生效
+    try {
+      await api.setNodeCollapsed({ projectId, nodeId, collapsed: next })
+    } catch (e) {
+      set({ nodes: apply(get().nodes, prev), error: `收展状态保存失败：${(e as Error).message}` })
     }
   },
 
@@ -941,3 +1003,16 @@ export const useTreeStore = create<TreeState>((set, get) => {
     })),
   }
 })
+
+/**
+ * ⚠️ 导出前做一次 globalThis 单例守卫 —— 这不是防御性冗余，是实测踩到的坑：
+ * 本机的 vite 构建会把本模块打进**两份**（产物里 store 的特征字符串各出现两次），
+ * 两份各自 `create` 一次就得到两个互不相通的 store，而各组件绑到哪一份是不确定的：
+ * 一旦"画布绑 A、卡片绑 B"，卡片上点按钮就只改到 B（UI 看着变了），
+ * 画布纹丝不动，且 B 那份从没跑过 init()、projectId 是空的 → 写不进磁盘。
+ * 挂到 globalThis 后，无论被打成几份，全应用拿到的都是同一个 store。
+ */
+type StoreSingletonHost = typeof globalThis & { __divergeTreeStore__?: typeof createdTreeStore }
+export const useTreeStore = (
+  (globalThis as StoreSingletonHost).__divergeTreeStore__ ??= createdTreeStore
+)

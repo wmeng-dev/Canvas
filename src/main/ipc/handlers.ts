@@ -18,6 +18,7 @@ import type {
   SaveExportRequest,
   SaveProjectAsRequest,
   SaveProjectRequest,
+  SetNodeCollapsedRequest,
   SetNodeVersionRequest,
   UpdateCommentBodyRequest,
   UpdateCommentPositionRequest,
@@ -113,6 +114,10 @@ export function registerIpcHandlers(svc: AppServices): void {
 
   ipcMain.handle(IPC.setNodeVersion, (_evt, req: SetNodeVersionRequest) =>
     svc.repo.setCurrentVersion(req.projectId, req.nodeId, req.versionId),
+  )
+
+  ipcMain.handle(IPC.setNodeCollapsed, (_evt, req: SetNodeCollapsedRequest) =>
+    svc.repo.setNodeCollapsed(req.projectId, req.nodeId, !!req.collapsed),
   )
 
   // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------

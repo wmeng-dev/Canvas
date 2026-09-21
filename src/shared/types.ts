@@ -82,6 +82,11 @@ export interface TreeNode {
   position?: { x: number; y: number }
   /** 挂在该节点上的评论气泡（节点级讨论） */
   comments?: CommentThread[]
+  /**
+   * 该节点是否处于"收起"状态（收起后其**全部后代**在画布上隐藏，自身仍可见）。
+   * 旧项目文件没有这个字段 → 读时由 migrateNode 兜底为 false（默认展开）。
+   */
+  collapsed?: boolean
   createdAt: string
   updatedAt: string
 }

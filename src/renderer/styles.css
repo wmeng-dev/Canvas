@@ -193,6 +193,33 @@ body {
   color: #fff;
 }
 
+/* 收展开关：钉在卡片右缘中间 —— 子节点就长在右边，开关正好落在父子之间。
+   收起时显示 "+N"（N = 被隐藏的后代总数），展开时显示 "−"。 */
+.collapse-toggle {
+  position: absolute;
+  top: 50%;
+  right: -13px;
+  transform: translateY(-50%);
+  z-index: 6;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid #d0d7de;
+  border-radius: 999px;
+  background: #f6f8fa;
+  color: #24292f;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.collapse-toggle:hover {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: #fff;
+}
+
 /* 画布自由气泡（type 'comment' 的节点本体） */
 .comment-bubble {
   display: flex;

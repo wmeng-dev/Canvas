@@ -146,10 +146,16 @@ export function IdeaNode({ id, data, selected, isConnectable }: NodeProps<Creati
   const commentOpen = activeCommentNodeId === id
   const commentTotal = threads.reduce((acc, t) => acc + 1 + t.replies.length, 0)
 
+  // --- 收展（折叠子树）：计数与动作都由画布算好/绑定好后随 data 下发 ---
+  const childCount = data.childCount ?? 0
+  const descendantCount = data.descendantCount ?? 0
+  const collapsed = data.collapsed ?? false
+
   return (
     <div
       data-testid="idea-node"
       data-has-analysis={showAnalysis ? '1' : '0'}
+      data-child-count={childCount}
       title={tooltip}
       style={{
         position: 'relative',
@@ -179,6 +185,23 @@ export function IdeaNode({ id, data, selected, isConnectable }: NodeProps<Creati
       >
         💬{commentTotal > 0 ? ` ${commentTotal}` : ''}
       </button>
+
+      {/* 收展开关：只在有子节点时出现；收起时显示 "+N"（N = 被隐藏的后代总数） */}
+      {childCount > 0 && (
+        <button
+          className="collapse-toggle"
+          data-testid="collapse-toggle"
+          data-collapsed={collapsed ? '1' : '0'}
+          data-hidden={descendantCount}
+          title={collapsed ? `展开 ${descendantCount} 个子节点` : '收起子节点'}
+          onClick={(e) => {
+            e.stopPropagation() // 不触发节点选中（收展不该切预览面板）
+            void data.onToggleCollapse?.(id)
+          }}
+        >
+          {collapsed ? `+${descendantCount}` : '−'}
+        </button>
+      )}
 
       <NodeToolbar isVisible={commentOpen} position={Position.Right} offset={10}>
         <div

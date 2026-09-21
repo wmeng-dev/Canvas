@@ -27,6 +27,7 @@ export const IPC = {
   regenerateNode: 'diverge:regenerateNode',
   updateNodePrompt: 'diverge:updateNodePrompt',
   setNodeVersion: 'diverge:setNodeVersion',
+  setNodeCollapsed: 'diverge:setNodeCollapsed',
   getAiSettings: 'diverge:getAiSettings',
   setDeepSeekKey: 'diverge:setDeepSeekKey',
   clearDeepSeekKey: 'diverge:clearDeepSeekKey',
@@ -90,6 +91,14 @@ export interface UpdateNodePromptRequest {
   projectId: string
   nodeId: string
   prompt: string
+}
+
+/** 收起/展开某个节点（只改这一节点的标记；后代各自的收展状态不变） */
+export interface SetNodeCollapsedRequest {
+  projectId: string
+  nodeId: string
+  /** true = 收起（隐藏全部后代）；false = 展开 */
+  collapsed: boolean
 }
 
 export interface SetNodeVersionRequest {
@@ -233,6 +242,8 @@ export interface DivergeApi {
   /** 只保存描述（不生成）；返回更新后的节点 */
   updateNodePrompt(req: UpdateNodePromptRequest): Promise<TreeNode>
   setNodeVersion(req: SetNodeVersionRequest): Promise<TreeNode>
+  /** 收起/展开节点（隐藏/显示其全部后代），返回更新后的节点 */
+  setNodeCollapsed(req: SetNodeCollapsedRequest): Promise<TreeNode>
 
   // --- 评论（气泡）：节点级 + 画布自由气泡 ---
   /** 给节点加评论气泡；返回新建的 thread */

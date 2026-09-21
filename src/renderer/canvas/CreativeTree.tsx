@@ -3,7 +3,7 @@
 // 缩略图（MiniMap）做「快速定位」：拖拽平移 + 滚轮缩放 + 单击跳转。
 // D.7 节点用自定义组件 IdeaNode（结果标题 + 可行性 + 优缺点风险）。
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   Background,
   Controls,
@@ -15,9 +15,11 @@ import {
 } from '@xyflow/react'
 import type { NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useTreeStore } from '../store/treeStore'
+import type { CreativeNode } from '../store/treeStore'
+import { toCollapsibleNode, useTreeStore } from '../store/treeStore'
 import { IdeaNode } from './IdeaNode'
 import { CommentNode } from './CommentNode'
+import { collectDescendantIds, collectHiddenIds } from '../../shared/tree'
 
 /** 判定"这是拖拽而不是点击"的位移阈值（px） */
 const CLICK_DRAG_TOLERANCE = 4
@@ -50,6 +52,49 @@ export function CreativeTree() {
   const setActiveCommentNode = useTreeStore((s) => s.setActiveCommentNode)
   const setActiveThread = useTreeStore((s) => s.setActiveThread)
   const togglePlacingComment = useTreeStore((s) => s.togglePlacingComment)
+  const toggleCollapse = useTreeStore((s) => s.toggleCollapse)
+
+  /**
+   * 收展后的"可见集"：被收起节点的**全部后代**隐藏，通向它们的边也一并去掉
+   * （边只要有一端不可见就必须移除，否则 React Flow 会去连一个已不在画布上的节点）。
+   * 没有任何收起节点时直接复用原数组 —— 保持引用稳定，别让 React Flow 每帧白重算。
+   */
+  const { visibleNodes, visibleEdges } = useMemo(() => {
+    const collapsible = nodes.map(toCollapsibleNode)
+    const hidden = collectHiddenIds(collapsible)
+
+    // 每个节点的"直接子节点数"（决定要不要显示收展开关）与"后代总数"（收起时的 +N）
+    const childCount = new Map<string, number>()
+    for (const c of collapsible) childCount.set(c.id, 0)
+    for (const c of collapsible) {
+      if (c.parentId) childCount.set(c.parentId, (childCount.get(c.parentId) ?? 0) + 1)
+    }
+    // ⚠️ 这两个计数在画布这一层算好、随 data 下发给卡片，而不是让卡片自己订阅 store 现算：
+    // 卡片的那份订阅覆盖不到"画布拓扑"，两边各算一次就会出现"画布有子节点、卡片却认为没有"的错位。
+    const decorate = (list: CreativeNode[]) =>
+      list.map((n) => {
+        const kids = childCount.get(n.id) ?? 0
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            childCount: kids,
+            descendantCount: kids === 0 ? 0 : collectDescendantIds(collapsible, n.id).length,
+            // 与两个计数同理：动作也从画布这一层下发，避免卡片绑到 store 的另一个副本
+            onToggleCollapse: toggleCollapse,
+          },
+        }
+      })
+
+    const base = hidden.size === 0 ? nodes : nodes.filter((n) => !hidden.has(n.id))
+    return {
+      visibleNodes: decorate(base),
+      visibleEdges:
+        hidden.size === 0
+          ? edges
+          : edges.filter((e) => !hidden.has(e.source) && !hidden.has(e.target)),
+    }
+  }, [nodes, edges, toggleCollapse])
 
   const { fitView, setCenter, screenToFlowPosition } = useReactFlow()
   const store = useStoreApi()
@@ -129,14 +174,15 @@ export function CreativeTree() {
       stopped = true
       window.clearTimeout(timer)
     }
-  }, [nodes, store])
+  }, [visibleNodes, store])
 
   // 节点数量增加时（生成/新增）重新适配视口，保证新节点可见。
   // ⚠️ 必须先等 nodesInitialized：React Flow 靠 ResizeObserver **异步**量节点尺寸，
   // 尺寸还没量到就 fitView 会失效（视口停在原地 matrix(1,0,0,1,0,0)，缩略图也是空的）。
   // 未就绪时提前 return 且**不推进 prevCount**，等就绪后这次 fitView 仍会补上。
   // ⚠️ 只统计 idea 节点：放置一个评论气泡不该触发"整树适配视口"（相机会突兀地跳）。
-  const ideaCount = nodes.filter((n) => n.type !== 'comment').length
+  // 统计的是**可见**节点 → 展开一个收起的分支时数量增加，相机自动把新露出的子节点带进视野。
+  const ideaCount = visibleNodes.filter((n) => n.type !== 'comment').length
   useEffect(() => {
     if (!nodesInitialized) return
     if (ideaCount > prevCount.current) {
@@ -191,8 +237,8 @@ export function CreativeTree() {
       style={{ width: '100%', height: '100%' }}
     >
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={visibleNodes}
+        edges={visibleEdges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
