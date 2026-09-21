@@ -36,6 +36,8 @@ export function PreviewPanel() {
   const cancelEditPrompt = useTreeStore((s) => s.cancelEditPrompt)
   const savePrompt = useTreeStore((s) => s.savePrompt)
   const editingPromptNodeId = useTreeStore((s) => s.editingPromptNodeId)
+  const proposingId = useTreeStore((s) => s.proposingId)
+  const generateProposal = useTreeStore((s) => s.generateProposal)
   const setVersion = useTreeStore((s) => s.setVersion)
   const regeneratingId = useTreeStore((s) => s.regeneratingId)
   const width = useTreeStore((s) => s.previewWidth)
@@ -76,6 +78,20 @@ export function PreviewPanel() {
   const versions = node?.data.versions ?? []
   const currentVersionId = node?.data.currentVersionId ?? null
   const busy = !!node && regeneratingId === node.id
+  /** 选中节点到根的层数：方案是沿这条链生成的，按钮上直接说清楚"用几层" */
+  const chainLength = useTreeStore((s) => {
+    if (!s.selectedNodeId) return 0
+    let len = 0
+    let cur = s.nodes.find((n) => n.id === s.selectedNodeId)
+    const seen = new Set<string>()
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id)
+      len++
+      cur = cur.data.parentId ? s.nodes.find((n) => n.id === cur!.data.parentId) : undefined
+    }
+    return len
+  })
+  const proposing = !!node && proposingId === node.id
 
   const btn: React.CSSProperties = {
     background: 'transparent',
@@ -181,6 +197,20 @@ export function PreviewPanel() {
                 重新生成
               </button>
             )}
+            {/* 收敛：沿「根 → 本节点」这条链路生成一份方案，产物挂在本节点下 */}
+            <button
+              data-testid="generate-proposal"
+              data-chain-length={chainLength}
+              disabled={proposing || busy}
+              title={`沿「根 → ${node.data.label}」这条链路（${chainLength} 层）生成一份可落地方案`}
+              onClick={() => void generateProposal(node.id)}
+              style={{
+                ...btn,
+                ...(proposing ? { color: '#8b949e', cursor: 'wait' } : { borderColor: '#1f6feb88', color: '#79c0ff' }),
+              }}
+            >
+              {proposing ? '生成方案中…' : `沿链路生成方案（${chainLength} 层）`}
+            </button>
           </div>
 
           {/* 描述区：只读展示原始描述；编辑态下变成输入框 + 「重新生成 / 保存（不生成）/ 取消」 */}

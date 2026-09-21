@@ -106,6 +106,16 @@ export function collectArchivedTopIds(nodes: VisibilityNode[]): string[] {
   return nodes.filter((n) => n.archived && !shadowed.has(n.id)).map((n) => n.id)
 }
 
+/**
+ * 从根到 nodeId 的**完整链路** id（含自身，顺序：根 → … → 目标）。
+ *
+ * 用途：选中一个节点 = 选中"从主题一路收敛到这里"的那条链，方案就是沿这条链生成的。
+ * 实现上就是把 `collectAncestorIds`（由近及远）反过来；成环保护由它保证。
+ */
+export function collectChainIds(nodes: VisibilityNode[], nodeId: string): string[] {
+  return [nodeId, ...collectAncestorIds(nodes, nodeId)].reverse()
+}
+
 export function collectHiddenIds(nodes: VisibilityNode[]): Set<string> {
   const map = buildChildrenMap(nodes)
   const hidden = new Set<string>()

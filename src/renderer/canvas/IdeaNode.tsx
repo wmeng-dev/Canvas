@@ -163,6 +163,7 @@ export function IdeaNode({ id, data, selected, isConnectable }: NodeProps<Creati
       data-has-analysis={showAnalysis ? '1' : '0'}
       data-child-count={childCount}
       data-color={color ?? 'default'}
+      data-kind={data.kind === 'proposal' ? 'proposal' : 'idea'}
       title={tooltip}
       style={{
         position: 'relative',
@@ -262,6 +263,12 @@ export function IdeaNode({ id, data, selected, isConnectable }: NodeProps<Creati
           overflow: 'hidden',
         }}
       >
+        {/* 方案节点：标题前挂一枚「方案」chip，一眼和"又一个想法"区分开（内联，不与标题重叠） */}
+        {data.kind === 'proposal' && (
+          <span className="proposal-badge" data-testid="proposal-badge" title="沿链路收敛生成的方案">
+            方案
+          </span>
+        )}
         {data.label}
       </div>
 

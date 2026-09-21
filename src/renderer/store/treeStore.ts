@@ -203,7 +203,11 @@ interface TreeState {
    * 成功后退出编辑态。
    */
   regenerate: (nodeId: string, prompt?: string) => Promise<void>
-  /** 进入"编辑描述"态（并选中该节点）；不会触发生成 */
+  /** 沿「根 → 该节点」的链路生成一份方案，产物作为方案节点挂在该节点下 */
+  generateProposal: (nodeId: string) => Promise<void>
+  /** 正在生成方案的节点 id（预览面板据此显示忙态） */
+  proposingId: string | null
+
   beginEditPrompt: (nodeId: string) => void
   /** 取消编辑：丢弃改动，回到只读展示 */
   cancelEditPrompt: () => void
@@ -285,6 +289,7 @@ function toCreativeNode(n: TreeNode, index: number): CreativeNode {
       collapsed: n.collapsed ?? false,
       archived: n.archived ?? false,
       color: n.color ?? null,
+      kind: n.kind === 'proposal' ? 'proposal' : 'idea',
     },
   }
 }
@@ -309,6 +314,7 @@ function mergeNode(nodes: CreativeNode[], updated: TreeNode): CreativeNode[] {
             collapsed: updated.collapsed ?? n.data.collapsed ?? false,
             archived: updated.archived ?? n.data.archived ?? false,
             color: updated.color ?? n.data.color ?? null,
+            kind: updated.kind === 'proposal' ? 'proposal' : 'idea',
           },
         }
       : n,
@@ -452,6 +458,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   dialogOpen: false,
   dialogParentId: null,
   generating: false,
+  proposingId: null,
   error: null,
   warning: null,
   menu: null,
@@ -772,7 +779,47 @@ const createdTreeStore = create<TreeState>((set, get) => {
     }
   },
 
+  /**
+   * 沿「根 → 该节点」的链路生成一份方案（收敛）。
+   * 与发散（`generate`）最大的差别：产物**只有一个**，且挂在链条**末端**而不是根下 ——
+   * 方案是这条链一路取舍后的结果，挂回根下就分不清它是从哪条链收出来的。
+   */
+  generateProposal: async (nodeId) => {
+    const { nodes, projectId } = get()
+    const api = window.diverge
+    if (!projectId) {
+      set({ error: '项目尚未加载' })
+      return
+    }
+    const siblings = nodes.filter((n) => n.data.parentId === nodeId).length
+    const position = computePosition(nodes, nodeId, siblings)
+    // 末端节点原本是收起的 → 生成后自动展开，否则新方案节点会立刻被藏住（看起来像"没生成"）
+    const wasCollapsed = nodes.find((n) => n.id === nodeId)?.data.collapsed ?? false
+    set({ proposingId: nodeId, error: null, warning: null })
+
+    try {
+      if (!api) throw new Error('需要主进程支持才能生成方案。')
+      const res = await api.generateProposal({ projectId, nodeId, position })
+      if (wasCollapsed) await api.setNodeCollapsed({ projectId, nodeId, collapsed: false })
+      const created = toCreativeNode(res.node, 0)
+      set((s) => ({
+        nodes: [
+          ...s.nodes.map((n) => (wasCollapsed && n.id === nodeId ? { ...n, data: { ...n.data, collapsed: false } } : n)),
+          created,
+        ],
+        edges: res.edge
+          ? [...s.edges, { id: res.edge.id, source: res.edge.source, target: res.edge.target, animated: true }]
+          : s.edges,
+        proposingId: null,
+        selectedNodeId: created.id,
+      }))
+    } catch (e) {
+      set({ proposingId: null, error: `生成方案失败：${(e as Error).message}` })
+    }
+  },
+
   regenerate: async (nodeId, prompt) => {
+
     const { projectId } = get()
     const api = window.diverge
     if (!api || !projectId) {

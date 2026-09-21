@@ -74,6 +74,8 @@ function migrateNode(n: TreeNode): void {
   // ⚠️ 统一归一化成 null（而不是留 undefined）：undefined 也算"合法默认色"（校验函数放行），
   // 不归一化的话字段会以 undefined 落盘，读回来既不是 null 也不是色值，排查时很费解。
   n.color = isValidCardColor(n.color) ? (n.color ?? null) : null
+  // 节点种类：旧文件没有该字段 → 一律是普通想法节点
+  if (n.kind !== 'proposal') n.kind = 'idea'
 }
 
 /** 文件级（画布自由气泡）评论列表向后补齐 */
@@ -204,6 +206,7 @@ export class ProjectRepository {
       // 免得磁盘上出现"缺字段"的项目文件，排查时还要猜它是"没设过"还是"丢了"。
       archived: input.archived ?? false,
       color: isValidCardColor(input.color) ? (input.color ?? null) : null,
+      kind: input.kind === 'proposal' ? 'proposal' : 'idea',
       createdAt: ts,
       updatedAt: ts,
     }

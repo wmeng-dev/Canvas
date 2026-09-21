@@ -31,6 +31,7 @@ export const IPC = {
   removeReply: 'diverge:removeReply',
   updateCommentPosition: 'diverge:updateCommentPosition',
   generateNode: 'diverge:generateNode',
+  generateProposal: 'diverge:generateProposal',
   regenerateNode: 'diverge:regenerateNode',
   updateNodePrompt: 'diverge:updateNodePrompt',
   setNodeVersion: 'diverge:setNodeVersion',
@@ -123,6 +124,27 @@ export interface SetNodeArchivedRequest {
   nodeIds: string[]
   /** true = 归档进回收站；false = 取出回画布 */
   archived: boolean
+}
+
+/**
+ * 沿"根 → nodeId"的链路生成一份方案（收敛）。
+ * `position` 由渲染端算好后传入（与发散一致：画布负责布局，core 只管落库）。
+ */
+export interface GenerateProposalRequest {
+  projectId: string
+  /** 链条末端（当前选中的节点） */
+  nodeId: string
+  generatorId?: string
+  position?: { x: number; y: number }
+}
+
+export interface GenerateProposalResponse {
+  /** 新建出来的方案节点（挂在上述节点之下） */
+  node: TreeNode
+  /** 末端节点 → 方案节点的边（建节点时自动生成） */
+  edge: TreeEdge | null
+  /** 参与生成的链路层数（1 = 只选了根节点） */
+  chainLength: number
 }
 
 /** 改卡片颜色；`color` 为 null 表示恢复默认色（必须是调色板认可的色值） */
@@ -284,6 +306,8 @@ export interface DivergeApi {
   /** "打开"：从用户选定的 .json 导入项目，返回导入后的项目文件 */
   openProject(): Promise<OpenProjectResponse>
   generateNode(req: GenerateNodeRequest): Promise<GenerateChildrenResponse>
+  /** 沿「根 → 该节点」的链路生成方案，产物是挂在该节点下的方案节点 */
+  generateProposal(req: GenerateProposalRequest): Promise<GenerateProposalResponse>
   regenerateNode(req: RegenerateNodeRequest): Promise<TreeNode>
   /** 只保存描述（不生成）；返回更新后的节点 */
   updateNodePrompt(req: UpdateNodePromptRequest): Promise<TreeNode>

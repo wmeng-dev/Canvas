@@ -98,6 +98,11 @@ export interface TreeNode {
    * `null` / 缺省 = 默认白。落盘前由仓储校验：必须是调色板认可的色值，否则拒绝。
    */
   color?: string | null
+  /**
+   * 节点种类：`idea` = 发散出来的想法（默认）；`proposal` = 沿某条链路收敛生成的**方案**。
+   * 方案节点在卡片上带「方案」标记，内容是一份成文方案而不是一条想法。
+   */
+  kind?: 'idea' | 'proposal'
   createdAt: string
   updatedAt: string
 }

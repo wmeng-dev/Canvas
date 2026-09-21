@@ -20,6 +20,7 @@ import type {
   SaveProjectRequest,
   SetNodeArchivedRequest,
   CreateProjectRequest,
+  GenerateProposalRequest,
   SetNodeColorRequest,
   SwitchProjectRequest,
   SetNodeCollapsedRequest,
@@ -38,6 +39,7 @@ import {
 } from '../../core/services'
 import type { AppServices } from '../../core/services'
 import { generateNode, regenerateNode } from '../../core/generate-node'
+import { generateProposal } from '../../core/generate-proposal'
 import { buildSettingsView, syncAiBackends } from '../../core/ai-backends'
 import { openSecret, sealSecret } from '../../core/settings-store'
 
@@ -111,6 +113,8 @@ export function registerIpcHandlers(svc: AppServices): void {
   })
 
   ipcMain.handle(IPC.generateNode, (_evt, req: GenerateNodeRequest) => generateNode(svc, req))
+
+  ipcMain.handle(IPC.generateProposal, (_evt, req: GenerateProposalRequest) => generateProposal(svc, req))
 
   ipcMain.handle(IPC.regenerateNode, (_evt, req: RegenerateNodeRequest) =>
     regenerateNode(svc, req),

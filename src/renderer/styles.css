@@ -313,6 +313,20 @@ body {
   cursor: wait;
 }
 
+/* 方案节点：标题前的一枚「方案」chip（内联，不与标题文字重叠） */
+.proposal-badge {
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: #fff;
+  background: #8957e5;
+}
+
 /* 卡片自定义颜色：hover 时卡片右下角浮出一排圆点色板 */
 .card-swatches {
   position: absolute;
