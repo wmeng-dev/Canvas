@@ -95,6 +95,13 @@ export interface CreativeNodeData extends Record<string, unknown> {
    * 落盘在 TreeNode.archived → 下次打开仍在回收站里。
    */
   archived?: boolean
+  /**
+   * 卡片自定义颜色（调色板里的背景色值，null = 默认白）。
+   * 落盘在 TreeNode.color → 下次打开保持配色。
+   */
+  color?: string | null
+  /** 改色动作同样由画布下发（与 onToggleCollapse 同理） */
+  onSetColor?: (nodeId: string, color: string | null) => void
 }
 
 export type CreativeNode = Node<CreativeNodeData>
@@ -198,6 +205,8 @@ interface TreeState {
   archiveNode: (nodeId: string) => Promise<void>
   /** 从回收站取出：自身**连同被归档的祖先**一起取消标记，否则取出来仍被祖先挡着看不见 */
   restoreNode: (nodeId: string) => Promise<void>
+  /** 改卡片颜色（null = 恢复默认色）；本地先改让画布立刻响应，再落库；落库失败回滚 */
+  setNodeColor: (nodeId: string, color: string | null) => Promise<void>
 
   // --- C.6 AI 后端设置 ---
   openAi: () => void
@@ -264,6 +273,7 @@ function toCreativeNode(n: TreeNode, index: number): CreativeNode {
       currentVersionId: n.currentVersionId ?? null,
       collapsed: n.collapsed ?? false,
       archived: n.archived ?? false,
+      color: n.color ?? null,
     },
   }
 }
@@ -287,6 +297,7 @@ function mergeNode(nodes: CreativeNode[], updated: TreeNode): CreativeNode[] {
             // 收展状态也跟随落库值；服务端万一没带（老文件）就保留本地现状，避免"重新生成后树意外展开"
             collapsed: updated.collapsed ?? n.data.collapsed ?? false,
             archived: updated.archived ?? n.data.archived ?? false,
+            color: updated.color ?? n.data.color ?? null,
           },
         }
       : n,
@@ -805,6 +816,23 @@ const createdTreeStore = create<TreeState>((set, get) => {
       await api.setNodeArchived({ projectId, nodeIds: ids, archived: false })
     } catch (e) {
       set({ nodes: prev, error: `取出失败：${(e as Error).message}` })
+    }
+  },
+
+  // ---------------- 卡片自定义颜色 ----------------
+  setNodeColor: async (nodeId, color) => {
+    const { nodes, projectId } = get()
+    const prevColor = nodes.find((n) => n.id === nodeId)?.data.color ?? null
+    const apply = (list: CreativeNode[], c: string | null) =>
+      list.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, color: c } } : n))
+    // 乐观更新：先改本地让卡片立刻变色，再落库；落库失败回滚到原色
+    set({ nodes: apply(nodes, color) })
+    const api = window.diverge
+    if (!api || !projectId) return // 无主进程（纯浏览器预览）：仅本地生效
+    try {
+      await api.setNodeColor({ projectId, nodeId, color: color ?? null })
+    } catch (e) {
+      set({ nodes: apply(get().nodes, prevColor), error: `改色失败：${(e as Error).message}` })
     }
   },
 

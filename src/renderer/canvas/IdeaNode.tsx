@@ -16,6 +16,7 @@ import type { CreativeNode } from '../store/treeStore'
 import { useTreeStore } from '../store/treeStore'
 import { CommentThreadPopover } from '../comments/CommentThreadPopover'
 import { feasibilityBand, hasAnalysis } from '../../shared/analysis'
+import { CARD_COLORS, resolveCardBg, resolveCardBorder } from '../../shared/colors'
 import type { IdeaAnalysis } from '../../shared/types'
 
 /** 卡片宽度：布局（computePosition 的 x 偏移）按这个宽度留的余量 */
@@ -151,20 +152,26 @@ export function IdeaNode({ id, data, selected, isConnectable }: NodeProps<Creati
   const descendantCount = data.descendantCount ?? 0
   const collapsed = data.collapsed ?? false
 
+  // --- 卡片自定义颜色：色值由画布随 data 下发，背景/边框按调色板解析（非法值自动退回默认白） ---
+  const color = data.color ?? null
+  const cardBg = resolveCardBg(color)
+  const cardBorder = resolveCardBorder(color)
+
   return (
     <div
       data-testid="idea-node"
       data-has-analysis={showAnalysis ? '1' : '0'}
       data-child-count={childCount}
+      data-color={color ?? 'default'}
       title={tooltip}
       style={{
         position: 'relative',
         width: IDEA_NODE_WIDTH,
         minHeight: showAnalysis ? IDEA_NODE_MIN_HEIGHT : undefined,
         boxSizing: 'border-box',
-        background: '#ffffff',
+        background: cardBg,
         color: TEXT,
-        border: `1px solid ${selected ? '#1f6feb' : '#d0d7de'}`,
+        border: `1px solid ${selected ? '#1f6feb' : cardBorder}`,
         borderRadius: 8,
         padding: '9px 11px 10px',
         boxShadow: selected
@@ -268,6 +275,25 @@ export function IdeaNode({ id, data, selected, isConnectable }: NodeProps<Creati
           </div>
         </>
       )}
+
+      {/* 卡片色板：hover 时在右下角浮出，点一下改色（默认色那颗表示"恢复默认"） */}
+      <div className="card-swatches" data-testid="card-swatches">
+        {CARD_COLORS.map((c) => (
+          <button
+            key={c.id}
+            className={`card-swatch${(color ?? CARD_COLORS[0].bg) === c.bg ? ' card-swatch--on' : ''}`}
+            data-testid="card-swatch"
+            data-color-id={c.id}
+            data-color-bg={c.bg}
+            title={c.label}
+            style={{ background: c.bg, borderColor: c.border }}
+            onClick={(e) => {
+              e.stopPropagation() // 不触发节点选中（改色不该切预览面板）
+              void data.onSetColor?.(id, c.id === 'default' ? null : c.bg)
+            }}
+          />
+        ))}
+      </div>
 
       <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
     </div>

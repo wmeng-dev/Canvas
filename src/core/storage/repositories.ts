@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { JsonStore } from './store'
+import { isValidCardColor } from '../../shared/colors'
 import type {
   CommentThread,
   IdeaAnalysis,
@@ -68,6 +69,10 @@ function migrateNode(n: TreeNode): void {
   if (typeof n.collapsed !== 'boolean') n.collapsed = false
   // 归档状态：旧文件没有该字段 → 默认未归档
   if (typeof n.archived !== 'boolean') n.archived = false
+  // 卡片颜色：旧文件没有该字段，或值不在调色板里 → 退回默认色。
+  // ⚠️ 统一归一化成 null（而不是留 undefined）：undefined 也算"合法默认色"（校验函数放行），
+  // 不归一化的话字段会以 undefined 落盘，读回来既不是 null 也不是色值，排查时很费解。
+  n.color = isValidCardColor(n.color) ? (n.color ?? null) : null
 }
 
 /** 文件级（画布自由气泡）评论列表向后补齐 */
@@ -174,6 +179,10 @@ export class ProjectRepository {
       currentVersionId: null,
       position: input.position,
       collapsed: input.collapsed ?? false,
+      // 显式写这两个字段（而不是等读时再补）：让落盘文件自描述，
+      // 免得磁盘上出现"缺字段"的项目文件，排查时还要猜它是"没设过"还是"丢了"。
+      archived: input.archived ?? false,
+      color: isValidCardColor(input.color) ? (input.color ?? null) : null,
       createdAt: ts,
       updatedAt: ts,
     }
@@ -352,6 +361,25 @@ export class ProjectRepository {
     file.project.updatedAt = ts
     this.store.write(projectId, file)
     return updated
+  }
+
+  // ---------- 卡片自定义颜色 ----------
+  /**
+   * 设置卡片颜色；`null` = 恢复默认色。
+   *
+   * ⚠️ 色值必须是调色板认可的（shared/colors.ts），非法值直接抛错而不是静默存下来 ——
+   * 存一个渲染端不认识的色值，卡片会退回默认色，用户会以为"改色没生效"，排查成本很高。
+   */
+  setNodeColor(projectId: string, nodeId: string, color: string | null): TreeNode {
+    if (!isValidCardColor(color)) throw new Error(`Unknown card color: ${String(color)}`)
+    const file = this.get(projectId)
+    const node = file.tree.nodes.find((n) => n.id === nodeId)
+    if (!node) throw new Error(`Node not found: ${nodeId}`)
+    node.color = color ?? null
+    node.updatedAt = nowIso()
+    file.project.updatedAt = node.updatedAt
+    this.store.write(projectId, file)
+    return node
   }
 
   // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------

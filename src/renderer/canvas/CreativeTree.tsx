@@ -69,6 +69,8 @@ export function CreativeTree() {
   const setActiveThread = useTreeStore((s) => s.setActiveThread)
   const togglePlacingComment = useTreeStore((s) => s.togglePlacingComment)
   const toggleCollapse = useTreeStore((s) => s.toggleCollapse)
+  // 卡片自定义颜色
+  const setNodeColor = useTreeStore((s) => s.setNodeColor)
   // 想法回收站：拖入归档 / 取出
   const archiveNode = useTreeStore((s) => s.archiveNode)
   const [dragOverTrash, setDragOverTrash] = useState(false)
@@ -109,6 +111,7 @@ export function CreativeTree() {
             descendantCount: kids === 0 ? 0 : collectDescendantIds(collapsible, n.id).length,
             // 与两个计数同理：动作也从画布这一层下发，避免卡片绑到 store 的另一个副本
             onToggleCollapse: toggleCollapse,
+            onSetColor: setNodeColor,
           },
         }
       })
@@ -121,7 +124,7 @@ export function CreativeTree() {
           ? edges
           : edges.filter((e) => !hidden.has(e.source) && !hidden.has(e.target)),
     }
-  }, [nodes, edges, toggleCollapse])
+  }, [nodes, edges, toggleCollapse, setNodeColor])
 
   const { fitView, setCenter, screenToFlowPosition } = useReactFlow()
   const store = useStoreApi()

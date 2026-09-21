@@ -220,6 +220,46 @@ body {
   color: #fff;
 }
 
+/* 卡片自定义颜色：hover 时卡片右下角浮出一排圆点色板 */
+.card-swatches {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d0d7de;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  /* 默认隐藏：卡片上已经有两个角标（评论/收展），常态再挂一排色点太吵 */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.react-flow__node:hover .card-swatches,
+.card-swatches:hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+.card-swatch {
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid #d0d7de;
+  cursor: pointer;
+}
+.card-swatch:hover {
+  transform: scale(1.18);
+}
+/* 当前生效的颜色：加一圈深色描边，一眼看出"这张卡现在是这个色" */
+.card-swatch--on {
+  box-shadow: 0 0 0 2px #1f6feb;
+}
+
 /* 想法回收站：画布底部居中的固定覆盖层（不随画布平移/缩放） */
 .trash-bin {
   position: absolute;

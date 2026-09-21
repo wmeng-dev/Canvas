@@ -19,6 +19,7 @@ import type {
   SaveProjectAsRequest,
   SaveProjectRequest,
   SetNodeArchivedRequest,
+  SetNodeColorRequest,
   SetNodeCollapsedRequest,
   SetNodeVersionRequest,
   UpdateCommentBodyRequest,
@@ -123,6 +124,10 @@ export function registerIpcHandlers(svc: AppServices): void {
 
   ipcMain.handle(IPC.setNodeArchived, (_evt, req: SetNodeArchivedRequest) =>
     svc.repo.setNodesArchived(req.projectId, req.nodeIds ?? [], !!req.archived),
+  )
+
+  ipcMain.handle(IPC.setNodeColor, (_evt, req: SetNodeColorRequest) =>
+    svc.repo.setNodeColor(req.projectId, req.nodeId, req.color ?? null),
   )
 
   // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------

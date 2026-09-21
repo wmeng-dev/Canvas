@@ -93,6 +93,11 @@ export interface TreeNode {
    * 归档节点可从回收站取出还原。旧项目文件读时由 migrateNode 兜底为 false。
    */
   archived?: boolean
+  /**
+   * 卡片自定义颜色（调色板里的背景色值，见 shared/colors.ts）。
+   * `null` / 缺省 = 默认白。落盘前由仓储校验：必须是调色板认可的色值，否则拒绝。
+   */
+  color?: string | null
   createdAt: string
   updatedAt: string
 }

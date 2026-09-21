@@ -5,9 +5,11 @@
 
 import { useEffect } from 'react'
 import { useTreeStore } from '../store/treeStore'
+import { CARD_COLORS } from '../../shared/colors'
 
+// ⚠️ 菜单变高（加了颜色行）时这个数要跟着改，否则靠近窗口底部时菜单会被裁掉。
 const MENU_WIDTH = 216
-const MENU_HEIGHT = 132
+const MENU_HEIGHT = 178
 
 export function NodeContextMenu() {
   const menu = useTreeStore((s) => s.menu)
@@ -17,6 +19,7 @@ export function NodeContextMenu() {
   const beginEditPrompt = useTreeStore((s) => s.beginEditPrompt)
   const selectNode = useTreeStore((s) => s.selectNode)
   const regeneratingId = useTreeStore((s) => s.regeneratingId)
+  const setNodeColor = useTreeStore((s) => s.setNodeColor)
 
   useEffect(() => {
     if (!menu) return
@@ -120,6 +123,47 @@ export function NodeContextMenu() {
         >
           {regenerateLabel}
         </button>
+
+        {/* 卡片颜色：一排圆点，点一下即改色；最左边那颗（默认白）= 恢复默认色 */}
+        <div
+          data-testid="menu-colors"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '8px 10px 6px',
+            borderTop: '1px solid #21262d',
+            marginTop: 4,
+          }}
+        >
+          <span style={{ fontSize: 11, color: '#7d8590', marginRight: 2 }}>颜色</span>
+          {CARD_COLORS.map((c) => {
+            const on = (node.data.color ?? CARD_COLORS[0].bg) === c.bg
+            return (
+              <button
+                key={c.id}
+                data-testid="menu-color-swatch"
+                data-color-id={c.id}
+                data-color-bg={c.bg}
+                title={c.label}
+                onClick={() => {
+                  closeMenu()
+                  // default 那颗表示"恢复默认色"（落 null，而不是存一个白色值）
+                  void setNodeColor(node.id, c.id === 'default' ? null : c.bg)
+                }}
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 999,
+                  background: c.bg,
+                  border: on ? '2px solid #1f6feb' : `1px solid ${c.border}`,
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              />
+            )
+          })}
+        </div>
       </div>
     </>
   )

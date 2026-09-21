@@ -29,6 +29,7 @@ export const IPC = {
   setNodeVersion: 'diverge:setNodeVersion',
   setNodeCollapsed: 'diverge:setNodeCollapsed',
   setNodeArchived: 'diverge:setNodeArchived',
+  setNodeColor: 'diverge:setNodeColor',
   getAiSettings: 'diverge:getAiSettings',
   setDeepSeekKey: 'diverge:setDeepSeekKey',
   clearDeepSeekKey: 'diverge:clearDeepSeekKey',
@@ -112,6 +113,13 @@ export interface SetNodeArchivedRequest {
   nodeIds: string[]
   /** true = 归档进回收站；false = 取出回画布 */
   archived: boolean
+}
+
+/** 改卡片颜色；`color` 为 null 表示恢复默认色（必须是调色板认可的色值） */
+export interface SetNodeColorRequest {
+  projectId: string
+  nodeId: string
+  color: string | null
 }
 
 export interface SetNodeVersionRequest {
@@ -259,6 +267,8 @@ export interface DivergeApi {
   setNodeCollapsed(req: SetNodeCollapsedRequest): Promise<TreeNode>
   /** 归档/取出；返回实际被改动的节点（未知 id 会被静默跳过） */
   setNodeArchived(req: SetNodeArchivedRequest): Promise<TreeNode[]>
+  /** 改卡片颜色（null = 恢复默认） */
+  setNodeColor(req: SetNodeColorRequest): Promise<TreeNode>
 
   // --- 评论（气泡）：节点级 + 画布自由气泡 ---
   /** 给节点加评论气泡；返回新建的 thread */
