@@ -82,7 +82,7 @@ assert.deepStrictEqual(
 ok('buildOutline(tree): siblings sorted by createdAt')
 
 // ---------- 2. 收敛路径：根 → 选中节点 ----------
-const pathDoc = buildOutline(file, { scope: 'path', nodeId: 'n4' })
+const pathDoc = buildOutline(file, { scope: 'path', nodeId: 'n4' }, new Date('2026-09-20T01:00:00Z'))
 assert.strictEqual(pathDoc.scope, 'path')
 assert.deepStrictEqual(
   pathDoc.nodes.map((n) => [n.id, n.depth]),
