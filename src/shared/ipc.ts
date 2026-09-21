@@ -39,6 +39,12 @@ export const IPC = {
   listProjects: 'diverge:listProjects',
   createProject: 'diverge:createProject',
   switchProject: 'diverge:switchProject',
+  /** 关闭画布 tab（**不删数据**）：只是从 tab 条移除，可再从"已关闭"恢复 */
+  closeProject: 'diverge:closeProject',
+  /** 重新打开一张已关闭的画布 */
+  reopenProject: 'diverge:reopenProject',
+  /** 已关闭的画布列表（供"已关闭"菜单展示） */
+  listClosedProjects: 'diverge:listClosedProjects',
   getAiSettings: 'diverge:getAiSettings',
   setDeepSeekKey: 'diverge:setDeepSeekKey',
   clearDeepSeekKey: 'diverge:clearDeepSeekKey',
@@ -164,6 +170,15 @@ export interface CreateProjectRequest {
 
 /** 切到某个已存在的画布 */
 export interface SwitchProjectRequest {
+  projectId: string
+}
+
+/** 关闭画布 tab（不删数据）/ 重新打开已关闭的画布 */
+export interface CloseProjectRequest {
+  projectId: string
+}
+
+export interface ReopenProjectRequest {
   projectId: string
 }
 
@@ -308,6 +323,12 @@ export interface DivergeApi {
   createProject(req?: CreateProjectRequest): Promise<ProjectFile>
   /** 切到指定画布 */
   switchProject(req: SwitchProjectRequest): Promise<ProjectFile>
+  /** 关闭画布 tab（项目文件保留）；返回关闭后的 tab 列表 */
+  closeProject(req: CloseProjectRequest): Promise<ProjectSummary[]>
+  /** 重新打开一张已关闭的画布 */
+  reopenProject(req: ReopenProjectRequest): Promise<ProjectFile>
+  /** 已关闭的画布列表 */
+  listClosedProjects(): Promise<ProjectSummary[]>
 
   // --- 评论（气泡）：节点级 + 画布自由气泡 ---
   /** 给节点加评论气泡；返回新建的 thread */

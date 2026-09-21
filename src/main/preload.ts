@@ -20,6 +20,8 @@ import type {
   SetNodeCollapsedRequest,
   CreateProjectRequest,
   SwitchProjectRequest,
+  CloseProjectRequest,
+  ReopenProjectRequest,
   GenerateProposalRequest,
   SetNodeColorRequest,
   SetNodeVersionRequest,
@@ -47,6 +49,9 @@ const api: DivergeApi = {
   listProjects: () => ipcRenderer.invoke(IPC.listProjects),
   createProject: (req?: CreateProjectRequest) => ipcRenderer.invoke(IPC.createProject, req ?? {}),
   switchProject: (req: SwitchProjectRequest) => ipcRenderer.invoke(IPC.switchProject, req),
+  closeProject: (req: CloseProjectRequest) => ipcRenderer.invoke(IPC.closeProject, req),
+  reopenProject: (req: ReopenProjectRequest) => ipcRenderer.invoke(IPC.reopenProject, req),
+  listClosedProjects: () => ipcRenderer.invoke(IPC.listClosedProjects),
 
   addNodeComment: (req: AddNodeCommentRequest) => ipcRenderer.invoke(IPC.addNodeComment, req),
   addCanvasComment: (req: AddCanvasCommentRequest) =>

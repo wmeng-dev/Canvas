@@ -7,8 +7,13 @@ import { GeneratorRegistry } from './generator/types'
 import { DeepSeekGenerator } from './generator/direct/deepseek'
 import { createFakeGenerator } from './generator/fake'
 import { McpClientManager } from './mcp/McpClientManager'
-import { SettingsStore, AppStateStore, plaintextSecretBox, openSecret } from './settings-store'
-import type { SecretBox } from './settings-store'
+import {
+  SettingsStore,
+  AppStateStore,
+  plaintextSecretBox,
+  openSecret,
+} from './settings-store'
+import type { AppState, SecretBox } from './settings-store'
 import type { ProjectFile, ProjectSummary } from '../shared/types'
 import type { McpServerStatus, McpServerTemplate } from '../shared/settings'
 
@@ -78,10 +83,49 @@ export function createServices(opts: CreateServicesOptions): AppServices {
 }
 
 /**
- * 画布 tab 条的列表。按最近更新倒序，刚动过的排前面。
+ * 画布 tab 条的列表（**不含已关闭的**），按最近更新倒序，刚动过的排前面。
  */
 export function listProjectSummaries(svc: AppServices): ProjectSummary[] {
-  return svc.repo.summaries()
+  const closed = new Set(svc.appState.read().closedProjectIds ?? [])
+  return svc.repo.summaries().filter((p) => !closed.has(p.id))
+}
+
+/** 「已关闭」列表：数据仍在磁盘，只是不在 tab 条上，随时可恢复。 */
+export function listClosedSummaries(svc: AppServices): ProjectSummary[] {
+  const closed = new Set(svc.appState.read().closedProjectIds ?? [])
+  const byId = new Map(svc.repo.summaries().map((p) => [p.id, p]))
+  // 按关闭顺序（先关的在前）输出；id 在磁盘上已不存在的直接跳过（文件被外部删了就别再列出来）
+  return [...closed].map((id) => byId.get(id)).filter((p): p is ProjectSummary => !!p)
+}
+
+/**
+ * 关闭一张画布 = **从 tab 条移除，项目文件保留**（与浏览器关标签页同一心智）。
+ * 关掉当前画布时，把 lastProjectId 挪到剩下的一张上，否则下次打开会回到一张已关闭的画布。
+ */
+export function closeProject(svc: AppServices, projectId: string): ProjectSummary[] {
+  // 未知 id 直接忽略：否则会在 closedProjectIds 里留下永远恢复不了的幽灵记录
+  if (!svc.repo.exists(projectId)) return listProjectSummaries(svc)
+  const state = svc.appState.read()
+  const closed = new Set(state.closedProjectIds ?? [])
+  closed.add(projectId)
+  const next: AppState = { ...state, closedProjectIds: [...closed] }
+  if (state.lastProjectId === projectId) {
+    const remaining = svc.repo.summaries().filter((p) => !closed.has(p.id))
+    next.lastProjectId = remaining[0]?.id
+  }
+  svc.appState.write(next)
+  return listProjectSummaries(svc)
+}
+
+/** 重新打开一张已关闭的画布：从"已关闭"里移除并切过去。 */
+export function reopenProject(svc: AppServices, projectId: string): ProjectFile {
+  const state = svc.appState.read()
+  svc.appState.write({
+    ...state,
+    closedProjectIds: (state.closedProjectIds ?? []).filter((id) => id !== projectId),
+    lastProjectId: projectId,
+  })
+  return svc.repo.get(projectId)
 }
 
 /**
@@ -112,11 +156,14 @@ export function switchProject(svc: AppServices, projectId: string): ProjectFile 
  * 选定后都会把 lastProjectId 写回，保证重启能恢复同一项目。
  */
 export function ensureProject(svc: AppServices): ProjectFile {
-  const lastId = svc.appState.read().lastProjectId
-  if (lastId && svc.repo.exists(lastId)) {
-    return svc.repo.get(lastId)
+  const state = svc.appState.read()
+  const closed = new Set(state.closedProjectIds ?? [])
+  // ⚠️ 已关闭的画布不参与"恢复上次"：否则关掉的 tab 会自己跑回来
+  if (state.lastProjectId && !closed.has(state.lastProjectId) && svc.repo.exists(state.lastProjectId)) {
+    return svc.repo.get(state.lastProjectId)
   }
-  const list = svc.repo.list()
+  // 库里挑第一张**未关闭**的；全被关掉了就新建引导画布
+  const list = svc.repo.list().filter((p) => !closed.has(p.id))
   if (list.length > 0) {
     const file = svc.repo.get(list[0].id)
     svc.appState.update((s) => ({ ...s, lastProjectId: file.project.id }))

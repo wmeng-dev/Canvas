@@ -212,11 +212,18 @@ export function CreativeTree() {
   // 未就绪时提前 return 且**不推进 prevCount**，等就绪后这次 fitView 仍会补上。
   // ⚠️ 只统计 idea 节点：放置一个评论气泡不该触发"整树适配视口"（相机会突兀地跳）。
   // 统计的是**可见**节点 → 展开一个收起的分支时数量增加，相机自动把新露出的子节点带进视野。
+  // ⚠️ **maxZoom: 1 是硬要求**（实测踩过）：新生成的子节点偶尔还没被量到尺寸，此时 fitView
+  //    只把"已测量的那部分"算进去 → 内容看着很小 → 一路放大到库默认的 maxZoom=2，
+  //    于是那个没参与计算的新节点被推出可视区（屏幕坐标跑到画布右边界之外，被预览面板挡住）。
+  //    表现为"刚生成的想法看不见了"。限制在 100% 后，即使少算了节点也只是位置略偏，不会飞出去。
   const ideaCount = visibleNodes.filter((n) => n.type !== 'comment').length
   useEffect(() => {
     if (!nodesInitialized) return
     if (ideaCount > prevCount.current) {
-      const id = window.setTimeout(() => void fitView({ duration: 300, padding: 0.25 }), 60)
+      const id = window.setTimeout(
+        () => void fitView({ duration: 300, padding: 0.25, maxZoom: 1 }),
+        60,
+      )
       prevCount.current = ideaCount
       return () => window.clearTimeout(id)
     }
@@ -324,13 +331,15 @@ export function CreativeTree() {
         }}
         onMoveStart={() => closeMenu()}
         fitView
+        // 同上的 maxZoom：初始适配与控件按钮（Controls 的 fitView）都别放大超过 100%
+        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
         // 去掉右下角那个第三方「React Flow」署名链接（.react-flow__attribution），与本产品无关。
         // 注意：@xyflow 官方是希望"隐藏署名即订阅 React Flow Pro"（见 reactflow.dev/remove-attribution），
         // 代码层面 MIT 且该开关是公开 API；如后续要合规，可考虑为上游订阅。
         proOptions={{ hideAttribution: true }}
       >
         <Background />
-        <Controls />
+        <Controls fitViewOptions={{ padding: 0.25, maxZoom: 1 }} />
         {/*
           ⚠️ @xyflow/react v12 的 <MiniMap> 把 pannable / zoomable 默认写成了 false
           （内核 XYMinimap.update 的默认值本是 true），不显式打开的话缩略图只是个"死的缩略图"：

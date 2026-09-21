@@ -12,6 +12,9 @@ export function ProjectTabs() {
   const switchProject = useTreeStore((s) => s.switchProject)
   const createProject = useTreeStore((s) => s.createProject)
   const renameProject = useTreeStore((s) => s.renameProject)
+  const closedProjects = useTreeStore((s) => s.closedProjects)
+  const closeProject = useTreeStore((s) => s.closeProject)
+  const reopenProject = useTreeStore((s) => s.reopenProject)
 
   /**
    * 当前画布的节点数**用本地实时值**：`projects` 是后端返回的快照，生成/删节点后不会自动刷新，
@@ -21,6 +24,17 @@ export function ProjectTabs() {
   const liveCount = useTreeStore((s) => s.nodes.filter((n) => n.type !== 'comment').length)
 
   const [nameDraft, setNameDraft] = useState(projectName)
+  // 「已关闭」菜单开关；点菜单外任意处收起
+  const [closedOpen, setClosedOpen] = useState(false)
+  const closedRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!closedOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (closedRef.current && !closedRef.current.contains(e.target as Node)) setClosedOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [closedOpen])
   useEffect(() => {
     setNameDraft(projectName)
   }, [projectName])
@@ -94,6 +108,23 @@ export function ProjectTabs() {
             <span className="project-tab__count" title="想法节点数" data-testid="project-tab-count">
               {active ? liveCount : p.nodeCount}
             </span>
+            {/*
+              关闭 tab：**不删画布数据**，只是从 tab 条移除，之后可从「已关闭」恢复。
+              所以要 stopPropagation —— 否则点 × 会先触发 tab 的 onClick 去切画布。
+            */}
+            <button
+              className="project-tab__close"
+              data-testid="close-canvas"
+              data-project-id={p.id}
+              disabled={switchingProject}
+              title={`关闭「${p.name}」（画布数据保留，可从「已关闭」恢复）`}
+              onClick={(e) => {
+                e.stopPropagation()
+                void closeProject(p.id)
+              }}
+            >
+              ×
+            </button>
           </div>
         )
       })}
@@ -107,6 +138,41 @@ export function ProjectTabs() {
       >
         {switchingProject ? '切换中…' : '＋ 新建画布'}
       </button>
+
+      <div className="project-tabs__closed" ref={closedRef}>
+        <button
+          data-testid="closed-canvases-toggle"
+          className="project-tab-closed"
+          disabled={switchingProject}
+          onClick={() => setClosedOpen((v) => !v)}
+          title="已关闭的画布（数据仍在，可重新打开）"
+        >
+          已关闭 {closedProjects.length}
+        </button>
+        {closedOpen && (
+          <div className="closed-menu" data-testid="closed-menu" data-count={closedProjects.length}>
+            {closedProjects.length === 0 && (
+              <div className="closed-menu__empty">还没有关闭的画布</div>
+            )}
+            {closedProjects.map((p) => (
+              <button
+                key={p.id}
+                className="closed-menu__item"
+                data-testid="closed-canvas-item"
+                data-project-id={p.id}
+                title={`重新打开「${p.name}」`}
+                onClick={() => {
+                  setClosedOpen(false)
+                  void reopenProject(p.id)
+                }}
+              >
+                <span className="closed-menu__name">{p.name}</span>
+                <span className="closed-menu__count">{p.nodeCount}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -59,6 +59,11 @@ const EMPTY: AiSettings = { mcpServers: [] }
 export interface AppState {
   /** 上次打开/创建的项目 id；启动时优先恢复它，实现"下次打开修改" */
   lastProjectId?: string
+  /**
+   * 被「关闭 tab」的画布 id（**只是从 tab 条移除，项目文件仍在磁盘**，可随时恢复）。
+   * 与「想法回收站」（节点级归档）不是一回事：这里是画布级、且数据完整保留。
+   */
+  closedProjectIds?: string[]
 }
 
 const EMPTY_STATE: AppState = {}
@@ -79,7 +84,12 @@ export class AppStateStore {
     if (!fs.existsSync(this.file)) return { ...EMPTY_STATE }
     try {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as Partial<AppState>
-      return { lastProjectId: raw.lastProjectId }
+      return {
+        lastProjectId: raw.lastProjectId,
+        closedProjectIds: Array.isArray(raw.closedProjectIds)
+          ? raw.closedProjectIds.filter((id): id is string => typeof id === 'string')
+          : [],
+      }
     } catch {
       return { ...EMPTY_STATE }
     }

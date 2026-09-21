@@ -21,6 +21,8 @@ import type {
   GenerateProposalRequest,
   SetNodeColorRequest,
   SwitchProjectRequest,
+  CloseProjectRequest,
+  ReopenProjectRequest,
   SetNodeCollapsedRequest,
   SetNodeVersionRequest,
   UpdateCommentBodyRequest,
@@ -30,9 +32,12 @@ import type {
 import type { AiSettingsView } from '../../shared/settings'
 import type { ProjectFile } from '../../shared/types'
 import {
+  closeProject,
   createProject,
   ensureProject,
+  listClosedSummaries,
   listProjectSummaries,
+  reopenProject,
   switchProject,
 } from '../../core/services'
 import type { AppServices } from '../../core/services'
@@ -145,6 +150,15 @@ export function registerIpcHandlers(svc: AppServices): void {
   ipcMain.handle(IPC.createProject, (_evt, req: CreateProjectRequest = {}) => createProject(svc, req.name))
 
   ipcMain.handle(IPC.switchProject, (_evt, req: SwitchProjectRequest) => switchProject(svc, req.projectId))
+
+  // 关闭 tab 只是把画布从 tab 条移除，**项目文件不动**，随时可再从"已关闭"恢复
+  ipcMain.handle(IPC.closeProject, (_evt, req: CloseProjectRequest) =>
+    closeProject(svc, req.projectId),
+  )
+  ipcMain.handle(IPC.reopenProject, (_evt, req: ReopenProjectRequest) =>
+    reopenProject(svc, req.projectId),
+  )
+  ipcMain.handle(IPC.listClosedProjects, () => listClosedSummaries(svc))
 
   // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------
   ipcMain.handle(IPC.addNodeComment, (_evt, req: AddNodeCommentRequest) =>

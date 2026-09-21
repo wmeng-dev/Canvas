@@ -123,6 +123,8 @@ interface TreeState {
   projectPath: string | null
   /** tab 条：所有画布的摘要（按最近更新倒序） */
   projects: ProjectSummary[]
+  /** 「已关闭」的画布（tab 关掉了但数据还在，可恢复） */
+  closedProjects: ProjectSummary[]
   /** 切画布要重新装载整棵树，给个忙态避免连点 */
   switchingProject: boolean
   nodes: CreativeNode[]
@@ -183,6 +185,15 @@ interface TreeState {
   createProject: () => Promise<void>
   /** 切到某个已存在的画布 */
   switchProject: (projectId: string) => Promise<void>
+  /**
+   * 关闭一张画布的 tab。**不删数据**：项目文件仍在磁盘，之后可从"已关闭"恢复。
+   * 关掉的是当前画布时自动切到剩下的一张；全关光了会自动补一张空白画布。
+   */
+  closeProject: (projectId: string) => Promise<void>
+  /** 重新打开一张已关闭的画布 */
+  reopenProject: (projectId: string) => Promise<void>
+  /** 拉取"已关闭"列表 */
+  loadClosedProjects: () => Promise<void>
 
   onNodesChange: (changes: NodeChange<CreativeNode>[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
@@ -448,6 +459,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
   lastSavedAt: null,
   projectPath: null,
   projects: [],
+  closedProjects: [],
   switchingProject: false,
   nodes: seedNodes,
   edges: [],
@@ -479,16 +491,18 @@ const createdTreeStore = create<TreeState>((set, get) => {
       return
     }
     try {
-      const [file, generators, projectsRes] = await Promise.all([
+      const [file, generators, projectsRes, closedRes] = await Promise.all([
         api.ensureProject(),
         api.listGenerators(),
         api.listProjects().catch(() => null), // 列表失败不该拖垮主流程
+        api.listClosedProjects().catch(() => null),
       ])
       const { nodes, edges, nodeComments } = fileToGraph(file)
       set({
         projectId: file.project.id,
         projectName: file.project.name,
         projects: projectsRes?.projects ?? [],
+        closedProjects: closedRes ?? [],
         nodes,
         edges,
         nodeComments,
@@ -659,6 +673,67 @@ const createdTreeStore = create<TreeState>((set, get) => {
 
   onEdgesChange: (changes) => set({ edges: applyEdgeChanges(changes, get().edges) }),
   onConnect: (conn) => set({ edges: addEdge({ ...conn, animated: true }, get().edges) }),
+
+  loadClosedProjects: async () => {
+    const api = window.diverge
+    if (!api) return
+    try {
+      const closed = await api.listClosedProjects()
+      set({ closedProjects: closed, error: null })
+    } catch (e) {
+      set({ error: `读取已关闭画布失败：${(e as Error).message}` })
+    }
+  },
+
+  closeProject: async (projectId) => {
+    const api = window.diverge
+    if (!api) {
+      set({ error: '需要主进程支持才能关闭画布。' })
+      return
+    }
+    set({ switchingProject: true })
+    try {
+      const remaining = await api.closeProject({ projectId })
+      await get().loadClosedProjects()
+      const { projectId: currentId } = get()
+      if (projectId !== currentId) {
+        // 关的不是当前画布：tab 列表更新一下就行，画布内容不用动
+        set({ projects: remaining, error: null })
+      } else if (remaining.length > 0) {
+        // 关的是当前画布 → 切到剩下的一张（服务端已把 lastProjectId 挪过去了）
+        const file = await api.switchProject({ projectId: remaining[0].id })
+        get().loadProject(file)
+        set({ projects: remaining, error: null })
+      } else {
+        // 全关掉了 → 像浏览器那样补一张空白画布，保证界面里始终有一张能用的
+        await get().createProject()
+      }
+    } catch (e) {
+      set({ error: `关闭画布失败：${(e as Error).message}` })
+    } finally {
+      set({ switchingProject: false })
+    }
+  },
+
+  reopenProject: async (projectId) => {
+    const api = window.diverge
+    if (!api) {
+      set({ error: '需要主进程支持才能恢复画布。' })
+      return
+    }
+    set({ switchingProject: true })
+    try {
+      const file = await api.reopenProject({ projectId })
+      get().loadProject(file)
+      await Promise.all([get().loadProjects(), get().loadClosedProjects()])
+      set({ error: null })
+    } catch (e) {
+      set({ error: `恢复画布失败：${(e as Error).message}` })
+    } finally {
+      set({ switchingProject: false })
+    }
+  },
+
   selectNode: (id) =>
     // 切到别的节点时退出编辑态：不能把 A 节点未保存的描述带到 B 节点上
     set((s) => ({ selectedNodeId: id, editingPromptNodeId: s.editingPromptNodeId === id ? s.editingPromptNodeId : null })),
