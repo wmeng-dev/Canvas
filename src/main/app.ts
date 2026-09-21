@@ -2,6 +2,7 @@
 // 拆出可复用函数，main.ts 只负责调用 bootstrap()。
 
 import { app, BrowserWindow, Menu } from 'electron'
+import * as fs from 'fs'
 import * as path from 'path'
 import * as http from 'http'
 import { createServices } from '../core/services'
@@ -73,6 +74,10 @@ export function createMainWindow(): BrowserWindow {
     height: 820,
     title: '发散创意画布 · Diverge',
     backgroundColor: '#0d1117',
+    // 窗口/任务栏图标：开发态从源码目录取（打包后由 exe/dmg 自带图标，找不到就退回默认）。
+    icon: fs.existsSync(path.join(app.getAppPath(), 'build', 'icon.ico'))
+      ? path.join(app.getAppPath(), 'build', 'icon.ico')
+      : undefined,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
