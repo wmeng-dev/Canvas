@@ -144,3 +144,15 @@ export interface ProjectFile {
   /** 画布自由气泡（不挂在任何节点上，钉在画布坐标） */
   comments?: CommentThread[]
 }
+
+/**
+ * 画布列表（tab 条）用的一份精简信息。
+ * 刻意不回传整份 ProjectFile：列出 N 个画布时把每棵完整树都搬到渲染端纯属浪费。
+ */
+export interface ProjectSummary {
+  id: string
+  name: string
+  updatedAt: string
+  /** 画布上的想法节点数（不含评论气泡） */
+  nodeCount: number
+}

@@ -220,6 +220,99 @@ body {
   color: #fff;
 }
 
+/* 画布 tab 条（顶栏下方）：一张画布一个 tab，末尾「＋ 新建画布」 */
+.project-tabs {
+  -webkit-app-region: no-drag;
+}
+.project-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 6px 12px;
+  margin-top: 6px;
+  border: 1px solid #21262d;
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  background: #161b22;
+  color: #8b949e;
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.project-tab:hover {
+  color: #e6edf3;
+  background: #1f242c;
+}
+.project-tab--active {
+  background: #0d1117;
+  color: #e6edf3;
+  border-color: #30363d;
+  /* 当前 tab 与下方画布连成一体：用一条底色顶掉分隔线 */
+  box-shadow: inset 0 2px 0 #1f6feb;
+  cursor: default;
+}
+.project-tab__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 当前 tab 里的画布名：透明边框，聚焦时才显形（与原来顶栏的输入框手感一致） */
+.project-tab__name-input {
+  width: 150px;
+  background: transparent;
+  color: #e6edf3;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 2px 5px;
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.project-tab__name-input:hover {
+  border-color: #30363d;
+}
+.project-tab__name-input:focus {
+  outline: none;
+  border-color: #1f6feb;
+  background: #0d1117;
+}
+.project-tab__count {
+  flex: none;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #21262d;
+  color: #8b949e;
+  font-size: 10.5px;
+  line-height: 15px;
+  text-align: center;
+}
+.project-tab--active .project-tab__count {
+  background: #1f6feb;
+  color: #fff;
+}
+.project-tab-new {
+  flex: none;
+  align-self: center;
+  margin-left: 4px;
+  padding: 4px 10px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: transparent;
+  color: #c9d1d9;
+  font-size: 12px;
+  cursor: pointer;
+}
+.project-tab-new:hover:not(:disabled) {
+  border-color: #1f6feb;
+  color: #e6edf3;
+}
+.project-tab-new:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 /* 卡片自定义颜色：hover 时卡片右下角浮出一排圆点色板 */
 .card-swatches {
   position: absolute;

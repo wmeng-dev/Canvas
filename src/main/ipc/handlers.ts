@@ -19,7 +19,9 @@ import type {
   SaveProjectAsRequest,
   SaveProjectRequest,
   SetNodeArchivedRequest,
+  CreateProjectRequest,
   SetNodeColorRequest,
+  SwitchProjectRequest,
   SetNodeCollapsedRequest,
   SetNodeVersionRequest,
   UpdateCommentBodyRequest,
@@ -28,7 +30,12 @@ import type {
 } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
 import type { ProjectFile } from '../../shared/types'
-import { ensureProject } from '../../core/services'
+import {
+  createProject,
+  ensureProject,
+  listProjectSummaries,
+  switchProject,
+} from '../../core/services'
 import type { AppServices } from '../../core/services'
 import { generateNode, regenerateNode } from '../../core/generate-node'
 import { buildSettingsView, syncAiBackends } from '../../core/ai-backends'
@@ -129,6 +136,13 @@ export function registerIpcHandlers(svc: AppServices): void {
   ipcMain.handle(IPC.setNodeColor, (_evt, req: SetNodeColorRequest) =>
     svc.repo.setNodeColor(req.projectId, req.nodeId, req.color ?? null),
   )
+
+  // ---------- 画布 tab 条：列出 / 新建 / 切换 ----------
+  ipcMain.handle(IPC.listProjects, () => ({ projects: listProjectSummaries(svc) }))
+
+  ipcMain.handle(IPC.createProject, (_evt, req: CreateProjectRequest = {}) => createProject(svc, req.name))
+
+  ipcMain.handle(IPC.switchProject, (_evt, req: SwitchProjectRequest) => switchProject(svc, req.projectId))
 
   // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------
   ipcMain.handle(IPC.addNodeComment, (_evt, req: AddNodeCommentRequest) =>

@@ -1,7 +1,14 @@
 // C.3/C.5 跨进程 IPC 契约：主进程 handler / preload / 渲染端 共用同一套类型与频道名。
 // 渲染端通过 window.diverge 访问（见 preload.ts）。
 
-import type { CommentThread, ContentType, ProjectFile, TreeEdge, TreeNode } from './types'
+import type {
+  CommentThread,
+  ContentType,
+  ProjectFile,
+  ProjectSummary,
+  TreeEdge,
+  TreeNode,
+} from './types'
 import type { AiSettingsView } from './settings'
 
 export const IPC = {
@@ -30,6 +37,9 @@ export const IPC = {
   setNodeCollapsed: 'diverge:setNodeCollapsed',
   setNodeArchived: 'diverge:setNodeArchived',
   setNodeColor: 'diverge:setNodeColor',
+  listProjects: 'diverge:listProjects',
+  createProject: 'diverge:createProject',
+  switchProject: 'diverge:switchProject',
   getAiSettings: 'diverge:getAiSettings',
   setDeepSeekKey: 'diverge:setDeepSeekKey',
   clearDeepSeekKey: 'diverge:clearDeepSeekKey',
@@ -120,6 +130,21 @@ export interface SetNodeColorRequest {
   projectId: string
   nodeId: string
   color: string | null
+}
+
+/** 画布 tab 条：列出所有画布（按最近更新倒序） */
+export interface ListProjectsResponse {
+  projects: ProjectSummary[]
+}
+
+/** 新建画布：name 为空时用默认名「未命名画布」 */
+export interface CreateProjectRequest {
+  name?: string
+}
+
+/** 切到某个已存在的画布 */
+export interface SwitchProjectRequest {
+  projectId: string
 }
 
 export interface SetNodeVersionRequest {
@@ -269,6 +294,12 @@ export interface DivergeApi {
   setNodeArchived(req: SetNodeArchivedRequest): Promise<TreeNode[]>
   /** 改卡片颜色（null = 恢复默认） */
   setNodeColor(req: SetNodeColorRequest): Promise<TreeNode>
+  /** 列出所有画布（tab 条用，按最近更新倒序） */
+  listProjects(): Promise<ListProjectsResponse>
+  /** 新建空白画布并切过去；返回新画布的完整内容 */
+  createProject(req?: CreateProjectRequest): Promise<ProjectFile>
+  /** 切到指定画布 */
+  switchProject(req: SwitchProjectRequest): Promise<ProjectFile>
 
   // --- 评论（气泡）：节点级 + 画布自由气泡 ---
   /** 给节点加评论气泡；返回新建的 thread */

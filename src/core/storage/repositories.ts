@@ -7,6 +7,7 @@ import type {
   NodeVersion,
   Project,
   ProjectFile,
+  ProjectSummary,
   TreeNode,
   TreeEdge,
 } from '../../shared/types'
@@ -115,6 +116,26 @@ export class ProjectRepository {
     return this.store
       .listProjectIds()
       .map((id) => this.store.read<ProjectFile>(id).project)
+  }
+
+  /**
+   * 画布 tab 条用的摘要列表（**按最近更新倒序**：刚动过的画布排前面）。
+   * ⚠️ 这里读的是原始文件（`store.read`）而不是 `get()` —— 拿摘要不需要跑 migrateNode，
+   * 但代价是拿到的是磁盘原样；只取 project 元数据与节点数，缺字段不影响。
+   */
+  summaries(): ProjectSummary[] {
+    return this.store
+      .listProjectIds()
+      .map((id) => {
+        const file = this.store.read<ProjectFile>(id)
+        return {
+          id: file.project.id,
+          name: file.project.name,
+          updatedAt: file.project.updatedAt,
+          nodeCount: (file.tree?.nodes ?? []).length,
+        }
+      })
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
   }
 
   rename(id: string, name: string): ProjectFile {

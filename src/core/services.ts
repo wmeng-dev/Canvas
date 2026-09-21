@@ -9,7 +9,7 @@ import { createFakeGenerator } from './generator/fake'
 import { McpClientManager } from './mcp/McpClientManager'
 import { SettingsStore, AppStateStore, plaintextSecretBox, openSecret } from './settings-store'
 import type { SecretBox } from './settings-store'
-import type { ProjectFile } from '../shared/types'
+import type { ProjectFile, ProjectSummary } from '../shared/types'
 import type { McpServerStatus, McpServerTemplate } from '../shared/settings'
 
 export interface AppServices {
@@ -75,6 +75,33 @@ export function createServices(opts: CreateServicesOptions): AppServices {
     mcpStatus: new Map(),
     exampleMcpServer: opts.exampleMcpServer ?? null,
   }
+}
+
+/**
+ * 画布 tab 条的列表。按最近更新倒序，刚动过的排前面。
+ */
+export function listProjectSummaries(svc: AppServices): ProjectSummary[] {
+  return svc.repo.summaries()
+}
+
+/**
+ * 新建一个画布并立刻切过去。
+ *
+ * ⚠️ 刻意**不加默认根节点**：用户明确要求新建的是空白页，从零开始自己加想法。
+ * （首次启动时 `ensureProject()` 仍会建一个带「创意主题」的画布，那是"从来没用过"的引导态，
+ *   与"主动新建"意图不同。）
+ */
+export function createProject(svc: AppServices, name?: string): ProjectFile {
+  const file = svc.repo.create(name?.trim() || '未命名画布')
+  svc.appState.update((s) => ({ ...s, lastProjectId: file.project.id }))
+  return svc.repo.get(file.project.id)
+}
+
+/** 切到指定画布（写 lastProjectId → 下次打开回来的还是这张）。 */
+export function switchProject(svc: AppServices, projectId: string): ProjectFile {
+  const file = svc.repo.get(projectId)
+  svc.appState.update((s) => ({ ...s, lastProjectId: file.project.id }))
+  return file
 }
 
 /**

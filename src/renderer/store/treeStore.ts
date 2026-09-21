@@ -15,6 +15,7 @@ import type {
   IdeaAnalysis,
   NodeVersion,
   ProjectFile,
+  ProjectSummary,
   TreeNode,
 } from '../../shared/types'
 
@@ -120,6 +121,10 @@ interface TreeState {
   lastSavedAt: string | null
   /** 最近一次"另存为"写出的文件路径（展示用） */
   projectPath: string | null
+  /** tab 条：所有画布的摘要（按最近更新倒序） */
+  projects: ProjectSummary[]
+  /** 切画布要重新装载整棵树，给个忙态避免连点 */
+  switchingProject: boolean
   nodes: CreativeNode[]
   edges: Edge[]
   selectedNodeId: string | null
@@ -170,8 +175,14 @@ interface TreeState {
   saveProject: () => Promise<void>
   saveProjectAs: () => Promise<void>
   openProject: () => Promise<void>
-  /** 用一份完整项目文件替换当前画布（打开/导入后调用） */
+  /** 用一份完整项目文件替换当前画布（打开/导入/切 tab 后调用） */
   loadProject: (file: ProjectFile) => void
+  /** 重新拉取画布列表（tab 条）；无主进程时静默跳过 */
+  loadProjects: () => Promise<void>
+  /** 新建一张**空白**画布并切过去 */
+  createProject: () => Promise<void>
+  /** 切到某个已存在的画布 */
+  switchProject: (projectId: string) => Promise<void>
 
   onNodesChange: (changes: NodeChange<CreativeNode>[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
@@ -432,6 +443,8 @@ const createdTreeStore = create<TreeState>((set, get) => {
   projectName: '我的创意',
   lastSavedAt: null,
   projectPath: null,
+  projects: [],
+  switchingProject: false,
   nodes: seedNodes,
   edges: [],
   selectedNodeId: null,
@@ -461,11 +474,16 @@ const createdTreeStore = create<TreeState>((set, get) => {
       return
     }
     try {
-      const [file, generators] = await Promise.all([api.ensureProject(), api.listGenerators()])
+      const [file, generators, projectsRes] = await Promise.all([
+        api.ensureProject(),
+        api.listGenerators(),
+        api.listProjects().catch(() => null), // 列表失败不该拖垮主流程
+      ])
       const { nodes, edges, nodeComments } = fileToGraph(file)
       set({
         projectId: file.project.id,
         projectName: file.project.name,
+        projects: projectsRes?.projects ?? [],
         nodes,
         edges,
         nodeComments,
@@ -492,6 +510,8 @@ const createdTreeStore = create<TreeState>((set, get) => {
     try {
       const file = await api.renameProject({ projectId, name: name.trim() || '未命名创意' })
       set({ projectName: file.project.name, error: null })
+      // tab 上是画布名，改名后要跟着变（列表里存的是改名前的快照）
+      await get().loadProjects()
     } catch (e) {
       set({ error: `重命名失败：${(e as Error).message}` })
     }
@@ -544,6 +564,9 @@ const createdTreeStore = create<TreeState>((set, get) => {
       const res = await api.openProject()
       if (res.opened && res.file) {
         get().loadProject(res.file)
+        // ⚠️ 导入的项目是新 id，不在原 tab 列表里 —— 不刷新的话 tab 条里就没有"当前画布"这一格，
+        // 连画布名输入框都会跟着消失（tab 条只给列表里的项渲染）。
+        await get().loadProjects()
         set({ error: null })
       } else if (res.error) {
         set({ error: `打开失败：${res.error}` })
@@ -574,6 +597,61 @@ const createdTreeStore = create<TreeState>((set, get) => {
   },
 
   onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) }),
+
+  loadProjects: async () => {
+    const api = window.diverge
+    if (!api) return
+    try {
+      const res = await api.listProjects()
+      set({ projects: res.projects ?? [] })
+    } catch {
+      // 列表只是 tab 条的辅助信息，拉不到就保持现状，不打扰用户
+    }
+  },
+
+  createProject: async () => {
+    const api = window.diverge
+    if (!api) {
+      set({ error: '需要主进程支持才能新建画布。' })
+      return
+    }
+    const current = get().projectId
+    set({ switchingProject: true })
+    try {
+      const file = await api.createProject({})
+      get().loadProject(file)
+      await get().loadProjects()
+      set({ error: null })
+    } catch (e) {
+      set({ error: `新建画布失败：${(e as Error).message}` })
+      // 失败就留在原画布，别把用户丢到半路
+      if (current) await get().switchProject(current).catch(() => undefined)
+    } finally {
+      set({ switchingProject: false })
+    }
+  },
+
+  switchProject: async (projectId) => {
+    const api = window.diverge
+    const { projectId: currentId } = get()
+    if (!api) {
+      set({ error: '需要主进程支持才能切换画布。' })
+      return
+    }
+    if (currentId === projectId) return // 点当前 tab：无事可做（也避免无谓重载丢状态）
+    set({ switchingProject: true })
+    try {
+      const file = await api.switchProject({ projectId })
+      get().loadProject(file)
+      await get().loadProjects()
+      set({ error: null })
+    } catch (e) {
+      set({ error: `切换画布失败：${(e as Error).message}` })
+    } finally {
+      set({ switchingProject: false })
+    }
+  },
+
   onEdgesChange: (changes) => set({ edges: applyEdgeChanges(changes, get().edges) }),
   onConnect: (conn) => set({ edges: addEdge({ ...conn, animated: true }, get().edges) }),
   selectNode: (id) =>
