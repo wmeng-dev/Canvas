@@ -30,3 +30,7 @@ probe-*.cjs
 # OS
 Thumbs.db
 Desktop.ini
+
+# CI 工作流模板放在 docs/ci/（真正的 .github/workflows 需要 PAT 的 workflow scope 才能推，
+# 本机缓存的 token 没有该 scope，一推就会被整批拒回）。别用 git add -A 把它带回来。
+/.github/
