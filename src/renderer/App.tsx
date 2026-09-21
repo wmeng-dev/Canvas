@@ -33,6 +33,8 @@ export function App() {
   const saveProject = useTreeStore((s) => s.saveProject)
   const saveProjectAs = useTreeStore((s) => s.saveProjectAs)
   const openProject = useTreeStore((s) => s.openProject)
+  const placingComment = useTreeStore((s) => s.placingComment)
+  const togglePlacingComment = useTreeStore((s) => s.togglePlacingComment)
   const generators = useTreeStore((s) => s.generators)
   const error = useTreeStore((s) => s.error)
   const clearError = useTreeStore((s) => s.clearError)
@@ -139,6 +141,20 @@ export function App() {
             }}
           >
             导出
+          </button>
+          <button
+            data-testid="toggle-comment"
+            onClick={togglePlacingComment}
+            title="在画布空白处点击，放置一条评论气泡"
+            style={{
+              ...ghostBtn,
+              marginRight: 8,
+              ...(placingComment
+                ? { background: '#1f6feb', color: '#fff', borderColor: '#1f6feb' }
+                : {}),
+            }}
+          >
+            {placingComment ? '点击画布放置评论…' : '💬 评论'}
           </button>
           <button
             data-testid="new-idea"

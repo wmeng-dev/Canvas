@@ -5,15 +5,22 @@ import * as fs from 'fs'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '../../shared/ipc'
 import type {
+  AddCanvasCommentRequest,
   AddMcpServerRequest,
+  AddNodeCommentRequest,
+  AddReplyRequest,
   GenerateNodeRequest,
   OpenProjectResponse,
   RegenerateNodeRequest,
+  RemoveCommentRequest,
+  RemoveReplyRequest,
   RenameProjectRequest,
   SaveExportRequest,
   SaveProjectAsRequest,
   SaveProjectRequest,
   SetNodeVersionRequest,
+  UpdateCommentBodyRequest,
+  UpdateCommentPositionRequest,
   UpdateNodePromptRequest,
 } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
@@ -106,6 +113,35 @@ export function registerIpcHandlers(svc: AppServices): void {
 
   ipcMain.handle(IPC.setNodeVersion, (_evt, req: SetNodeVersionRequest) =>
     svc.repo.setCurrentVersion(req.projectId, req.nodeId, req.versionId),
+  )
+
+  // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------
+  ipcMain.handle(IPC.addNodeComment, (_evt, req: AddNodeCommentRequest) =>
+    svc.repo.addNodeComment(req.projectId, req.nodeId, String(req.body ?? '')),
+  )
+
+  ipcMain.handle(IPC.addCanvasComment, (_evt, req: AddCanvasCommentRequest) =>
+    svc.repo.addCanvasComment(req.projectId, Number(req.x) || 0, Number(req.y) || 0, String(req.body ?? '')),
+  )
+
+  ipcMain.handle(IPC.updateCommentBody, (_evt, req: UpdateCommentBodyRequest) =>
+    svc.repo.updateCommentBody(req.projectId, req.threadId, String(req.body ?? '')),
+  )
+
+  ipcMain.handle(IPC.addReply, (_evt, req: AddReplyRequest) =>
+    svc.repo.addReply(req.projectId, req.threadId, String(req.body ?? '')),
+  )
+
+  ipcMain.handle(IPC.removeComment, (_evt, req: RemoveCommentRequest) =>
+    svc.repo.removeComment(req.projectId, req.threadId),
+  )
+
+  ipcMain.handle(IPC.removeReply, (_evt, req: RemoveReplyRequest) =>
+    svc.repo.removeReply(req.projectId, req.threadId, req.replyId),
+  )
+
+  ipcMain.handle(IPC.updateCommentPosition, (_evt, req: UpdateCommentPositionRequest) =>
+    svc.repo.updateCommentPosition(req.projectId, req.threadId, Number(req.x) || 0, Number(req.y) || 0),
   )
 
   // ---------- C.6 AI 后端设置 ----------

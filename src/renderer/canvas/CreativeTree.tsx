@@ -17,6 +17,7 @@ import type { NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useTreeStore } from '../store/treeStore'
 import { IdeaNode } from './IdeaNode'
+import { CommentNode } from './CommentNode'
 
 /** 判定"这是拖拽而不是点击"的位移阈值（px） */
 const CLICK_DRAG_TOLERANCE = 4
@@ -29,8 +30,9 @@ const MEASURE_RETRY_INTERVAL = 70
  * ⚠️ nodeTypes 必须定义在组件**外面**（模块级常量）。
  * 放在组件里每次都生成新对象 → React Flow 认为节点类型变了 → 整棵树重新挂载
  * （表现为每次渲染都丢选中态/重测量，且控制台会警告）。
+ * 'comment' = 画布自由评论气泡（CommentNode，无 Handle、不参与连线）。
  */
-const nodeTypes: NodeTypes = { idea: IdeaNode }
+const nodeTypes: NodeTypes = { idea: IdeaNode, comment: CommentNode }
 
 export function CreativeTree() {
   const nodes = useTreeStore((s) => s.nodes)
@@ -41,8 +43,15 @@ export function CreativeTree() {
   const selectNode = useTreeStore((s) => s.selectNode)
   const openMenu = useTreeStore((s) => s.openMenu)
   const closeMenu = useTreeStore((s) => s.closeMenu)
+  // 评论（气泡）：放置模式 + 弹层开关 + 拖拽落点持久化
+  const placingComment = useTreeStore((s) => s.placingComment)
+  const addCanvasComment = useTreeStore((s) => s.addCanvasComment)
+  const updateCommentPosition = useTreeStore((s) => s.updateCommentPosition)
+  const setActiveCommentNode = useTreeStore((s) => s.setActiveCommentNode)
+  const setActiveThread = useTreeStore((s) => s.setActiveThread)
+  const togglePlacingComment = useTreeStore((s) => s.togglePlacingComment)
 
-  const { fitView, setCenter } = useReactFlow()
+  const { fitView, setCenter, screenToFlowPosition } = useReactFlow()
   const store = useStoreApi()
   const nodesInitialized = useNodesInitialized()
   const prevCount = useRef(0)
@@ -126,15 +135,17 @@ export function CreativeTree() {
   // ⚠️ 必须先等 nodesInitialized：React Flow 靠 ResizeObserver **异步**量节点尺寸，
   // 尺寸还没量到就 fitView 会失效（视口停在原地 matrix(1,0,0,1,0,0)，缩略图也是空的）。
   // 未就绪时提前 return 且**不推进 prevCount**，等就绪后这次 fitView 仍会补上。
+  // ⚠️ 只统计 idea 节点：放置一个评论气泡不该触发"整树适配视口"（相机会突兀地跳）。
+  const ideaCount = nodes.filter((n) => n.type !== 'comment').length
   useEffect(() => {
     if (!nodesInitialized) return
-    if (nodes.length > prevCount.current) {
+    if (ideaCount > prevCount.current) {
       const id = window.setTimeout(() => void fitView({ duration: 300, padding: 0.25 }), 60)
-      prevCount.current = nodes.length
+      prevCount.current = ideaCount
       return () => window.clearTimeout(id)
     }
-    prevCount.current = nodes.length
-  }, [nodes.length, nodesInitialized, fitView])
+    prevCount.current = ideaCount
+  }, [ideaCount, nodesInitialized, fitView])
 
   // 记录"在缩略图上按下"的位置：拖拽平移结束后浏览器仍会补发一个 click，
   // 用它把"拖拽"和"单击定位"区分开，否则每次拖完都会被强制跳一次。
@@ -174,7 +185,11 @@ export function CreativeTree() {
   )
 
   return (
-    <div ref={wrapRef} style={{ width: '100%', height: '100%' }}>
+    <div
+      ref={wrapRef}
+      className={placingComment ? 'canvas-placing' : undefined}
+      style={{ width: '100%', height: '100%' }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -184,6 +199,13 @@ export function CreativeTree() {
         onConnect={onConnect}
         onNodeClick={(_, node) => {
           closeMenu()
+          // 放置模式下点任何节点都只是取消放置（气泡只落在空白画布上）
+          if (placingComment) {
+            togglePlacingComment()
+            return
+          }
+          setActiveCommentNode(null)
+          setActiveThread(null)
           selectNode(node.id)
         }}
         onNodeContextMenu={(e, node) => {
@@ -191,8 +213,22 @@ export function CreativeTree() {
           selectNode(node.id)
           openMenu(node.id, e.clientX, e.clientY)
         }}
-        onPaneClick={() => {
+        onNodeDragStop={(_, node) => {
+          // 自由气泡拖完把流坐标写回项目文件（普通 idea 节点的拖拽位置本就不落盘，行为一致地不管）
+          if (node.type === 'comment') {
+            void updateCommentPosition(node.id, node.position.x, node.position.y)
+          }
+        }}
+        onPaneClick={(e) => {
           closeMenu()
+          if (placingComment) {
+            // 放置模式：把点击处换算成流坐标，创建自由气泡（store 内会退出放置模式并打开弹层）
+            const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+            void addCanvasComment({ x: pos.x, y: pos.y })
+            return
+          }
+          setActiveCommentNode(null)
+          setActiveThread(null)
           selectNode(null)
         }}
         onMoveStart={() => closeMenu()}

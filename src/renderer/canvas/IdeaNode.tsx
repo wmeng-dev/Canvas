@@ -10,8 +10,11 @@
 //      ROOT_SPACING_Y / CHILD_SPACING_Y（X 方向见 IDEA_NODE_WIDTH 与 CHILD_SPACING_X）。
 // 原始输入不丢弃：挂在卡片 title 上，鼠标悬停可见；预览面板里也有一行。
 
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { useState } from 'react'
+import { Handle, NodeToolbar, Position, type NodeProps } from '@xyflow/react'
 import type { CreativeNode } from '../store/treeStore'
+import { useTreeStore } from '../store/treeStore'
+import { CommentThreadPopover } from '../comments/CommentThreadPopover'
 import { feasibilityBand, hasAnalysis } from '../../shared/analysis'
 import type { IdeaAnalysis } from '../../shared/types'
 
@@ -129,10 +132,19 @@ function FeasibilityRow({ analysis }: { analysis: IdeaAnalysis }) {
   )
 }
 
-export function IdeaNode({ data, selected, isConnectable }: NodeProps<CreativeNode>) {
+export function IdeaNode({ id, data, selected, isConnectable }: NodeProps<CreativeNode>) {
   const analysis = data.analysis ?? null
   const showAnalysis = hasAnalysis(analysis)
   const tooltip = data.prompt ? `原始描述：${data.prompt}` : undefined
+
+  // --- 评论（气泡）角标与弹层：threads 读 store 的 nodeComments 映射（落盘在节点上） ---
+  const threads = useTreeStore((s) => s.nodeComments[id] ?? [])
+  const activeCommentNodeId = useTreeStore((s) => s.activeCommentNodeId)
+  const setActiveCommentNode = useTreeStore((s) => s.setActiveCommentNode)
+  const addNodeComment = useTreeStore((s) => s.addNodeComment)
+  const [newComment, setNewComment] = useState('')
+  const commentOpen = activeCommentNodeId === id
+  const commentTotal = threads.reduce((acc, t) => acc + 1 + t.replies.length, 0)
 
   return (
     <div
@@ -140,6 +152,7 @@ export function IdeaNode({ data, selected, isConnectable }: NodeProps<CreativeNo
       data-has-analysis={showAnalysis ? '1' : '0'}
       title={tooltip}
       style={{
+        position: 'relative',
         width: IDEA_NODE_WIDTH,
         minHeight: showAnalysis ? IDEA_NODE_MIN_HEIGHT : undefined,
         boxSizing: 'border-box',
@@ -153,6 +166,57 @@ export function IdeaNode({ data, selected, isConnectable }: NodeProps<CreativeNo
           : '0 1px 4px rgba(0, 0, 0, 0.4)',
       }}
     >
+      {/* 评论气泡角标：绝对定位在卡片右上角，点击开关评论弹层 */}
+      <button
+        className="comment-badge"
+        data-testid="comment-badge"
+        data-count={commentTotal}
+        title={commentTotal > 0 ? `${commentTotal} 条评论` : '添加评论'}
+        onClick={(e) => {
+          e.stopPropagation() // 不触发节点选中（开弹层不该切预览面板）
+          setActiveCommentNode(commentOpen ? null : id)
+        }}
+      >
+        💬{commentTotal > 0 ? ` ${commentTotal}` : ''}
+      </button>
+
+      <NodeToolbar isVisible={commentOpen} position={Position.Right} offset={10}>
+        <div
+          className="comment-node-panel"
+          data-testid="node-comment-panel"
+          // 同 CommentThreadPopover：阻断冒泡，避免弹层内点击触发 pane 的 onClick 关掉自己
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="comment-node-panel-title">评论（{threads.length}）</div>
+          {threads.length === 0 && <div className="comment-empty">还没有评论</div>}
+          {threads.map((t) => (
+            <CommentThreadPopover key={t.id} thread={t} />
+          ))}
+          <textarea
+            className="comment-input"
+            data-testid="comment-new-input"
+            value={newComment}
+            placeholder="新的评论…"
+            rows={2}
+            onChange={(e) => setNewComment(e.target.value)}
+          />
+          <div className="comment-row">
+            <button
+              className="comment-btn primary"
+              data-testid="comment-new-send"
+              disabled={!newComment.trim()}
+              onClick={async () => {
+                const ok = await addNodeComment(id, newComment)
+                if (ok) setNewComment('') // 成功才清空；失败保留草稿
+              }}
+            >
+              添加评论
+            </button>
+          </div>
+        </div>
+      </NodeToolbar>
+
       <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
 
       <div

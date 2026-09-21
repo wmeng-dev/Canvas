@@ -4,16 +4,23 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
 import type {
+  AddCanvasCommentRequest,
   AddMcpServerRequest,
+  AddNodeCommentRequest,
+  AddReplyRequest,
   DivergeApi,
   GenerateNodeRequest,
   OpenProjectResponse,
   RenameProjectRequest,
   RegenerateNodeRequest,
+  RemoveCommentRequest,
+  RemoveReplyRequest,
   SaveExportRequest,
   SaveProjectAsRequest,
   SaveProjectRequest,
   SetNodeVersionRequest,
+  UpdateCommentBodyRequest,
+  UpdateCommentPositionRequest,
   UpdateNodePromptRequest,
 } from '../shared/ipc'
 
@@ -29,6 +36,17 @@ const api: DivergeApi = {
   updateNodePrompt: (req: UpdateNodePromptRequest) =>
     ipcRenderer.invoke(IPC.updateNodePrompt, req),
   setNodeVersion: (req: SetNodeVersionRequest) => ipcRenderer.invoke(IPC.setNodeVersion, req),
+
+  addNodeComment: (req: AddNodeCommentRequest) => ipcRenderer.invoke(IPC.addNodeComment, req),
+  addCanvasComment: (req: AddCanvasCommentRequest) =>
+    ipcRenderer.invoke(IPC.addCanvasComment, req),
+  updateCommentBody: (req: UpdateCommentBodyRequest) =>
+    ipcRenderer.invoke(IPC.updateCommentBody, req),
+  addReply: (req: AddReplyRequest) => ipcRenderer.invoke(IPC.addReply, req),
+  removeComment: (req: RemoveCommentRequest) => ipcRenderer.invoke(IPC.removeComment, req),
+  removeReply: (req: RemoveReplyRequest) => ipcRenderer.invoke(IPC.removeReply, req),
+  updateCommentPosition: (req: UpdateCommentPositionRequest) =>
+    ipcRenderer.invoke(IPC.updateCommentPosition, req),
 
   getAiSettings: () => ipcRenderer.invoke(IPC.getAiSettings),
   setDeepSeekKey: (apiKey: string) => ipcRenderer.invoke(IPC.setDeepSeekKey, apiKey),

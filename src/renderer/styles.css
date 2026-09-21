@@ -163,3 +163,176 @@ body {
   padding: 5px 8px;
   text-align: left;
 }
+
+/* ---------------- 评论（气泡）：节点角标 + 画布自由气泡 + 弹层 ---------------- */
+
+/* 放置评论模式：画布光标变十字，提示"点这里放气泡" */
+.canvas-placing .react-flow__pane {
+  cursor: crosshair;
+}
+
+/* idea 节点卡片右上角的评论角标（卡片是白底深字，角标随之用浅色描边） */
+.comment-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  z-index: 5;
+  border: 1px solid #d0d7de;
+  border-radius: 999px;
+  background: #f6f8fa;
+  color: #24292f;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 7px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.comment-badge:hover {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: #fff;
+}
+
+/* 画布自由气泡（type 'comment' 的节点本体） */
+.comment-bubble {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  color: #e6edf3;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.comment-bubble:hover {
+  border-color: #1f6feb;
+}
+.comment-bubble.active {
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.35);
+}
+.comment-bubble-count {
+  font-weight: 700;
+  color: #58a6ff;
+}
+
+/* 评论弹层（NodeToolbar 里渲染的面板）：深色，浮在画布上 */
+.comment-node-panel,
+.comment-thread {
+  width: 240px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  padding: 8px;
+  color: #e6edf3;
+  font-size: 12px;
+}
+.comment-node-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.comment-node-panel-title {
+  font-weight: 600;
+  color: #c9d1d9;
+}
+.comment-node-panel .comment-empty {
+  color: #57606a;
+  font-size: 11.5px;
+}
+.comment-thread {
+  border: 1px solid #21262d;
+  background: #0d1117;
+}
+
+.comment-input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  background: #010409;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #e6edf3;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 5px 7px;
+  line-height: 1.4;
+}
+.comment-input:focus {
+  outline: none;
+  border-color: #1f6feb;
+}
+
+.comment-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+.comment-btn {
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #21262d;
+  color: #e6edf3;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.comment-btn.primary:not(:disabled) {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: #fff;
+}
+.comment-btn.primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.comment-btn.danger {
+  color: #f85149;
+}
+.comment-btn.danger:hover {
+  background: #3d1418;
+  border-color: #f85149;
+}
+
+.comment-replies {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.comment-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  background: #161b22;
+  border: 1px solid #21262d;
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+.comment-reply-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+  color: #c9d1d9;
+}
+.comment-x {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: #57606a;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.comment-x:hover {
+  color: #f85149;
+}

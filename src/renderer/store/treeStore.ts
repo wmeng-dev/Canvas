@@ -7,7 +7,14 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import type { AddMcpServerRequest, GeneratorInfo } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
-import type { ContentType, IdeaAnalysis, NodeVersion, ProjectFile, TreeNode } from '../../shared/types'
+import type {
+  CommentThread,
+  ContentType,
+  IdeaAnalysis,
+  NodeVersion,
+  ProjectFile,
+  TreeNode,
+} from '../../shared/types'
 
 // ---------------- D.3 预览面板宽度（可拖动，不再固定 340） ----------------
 
@@ -63,6 +70,11 @@ export interface CreativeNodeData extends Record<string, unknown> {
   /** 历史版本（按时间升序）与当前版本，用于"翻案" */
   versions?: NodeVersion[]
   currentVersionId?: string | null
+  /**
+   * 画布自由气泡才携带：该气泡对应的评论 thread。
+   * idea 节点不带（节点级评论走 store 的 nodeComments 映射）。
+   */
+  thread?: CommentThread
 }
 
 export type CreativeNode = Node<CreativeNodeData>
@@ -113,6 +125,16 @@ interface TreeState {
 
   /** D.3 预览面板宽度（可拖边缘调整） */
   previewWidth: number
+
+  // --- 评论（气泡）：节点级 + 画布自由气泡 ---
+  /** 节点级评论的本地镜像：nodeId -> threads（落盘在 TreeNode.comments） */
+  nodeComments: Record<string, CommentThread[]>
+  /** 当前打开评论弹层的 idea 节点 id（null = 关闭） */
+  activeCommentNodeId: string | null
+  /** 当前打开评论弹层的画布气泡 thread id（null = 关闭） */
+  activeThreadId: string | null
+  /** 画布放置评论模式：下一次点击空白处即在该处创建气泡 */
+  placingComment: boolean
 
   init: () => Promise<void>
 
@@ -168,6 +190,24 @@ interface TreeState {
   // --- D.3 预览面板宽度 ---
   setPreviewWidth: (w: number) => void
   resetPreviewWidth: () => void
+
+  // --- 评论（气泡）：节点级 + 画布自由气泡 ---
+  /** 返回 true 表示成功（调用方据此清空输入草稿，失败保留） */
+  addNodeComment: (nodeId: string, body: string) => Promise<boolean>
+  /** 在画布流坐标创建自由气泡（body 为空，随后在弹层里填写）；成功后自动打开其弹层 */
+  addCanvasComment: (pos: { x: number; y: number }) => Promise<boolean>
+  updateCommentBody: (threadId: string, body: string) => Promise<boolean>
+  addReply: (threadId: string, body: string) => Promise<boolean>
+  removeComment: (threadId: string) => Promise<boolean>
+  removeReply: (threadId: string, replyId: string) => Promise<boolean>
+  /** 自由气泡拖动后回写坐标（静默失败只报错条） */
+  updateCommentPosition: (threadId: string, x: number, y: number) => Promise<void>
+  /** 打开/关闭某 idea 节点的评论弹层（互斥地关闭画布气泡弹层） */
+  setActiveCommentNode: (nodeId: string | null) => void
+  /** 打开/关闭某画布气泡的评论弹层（互斥地关闭节点弹层） */
+  setActiveThread: (threadId: string | null) => void
+  /** 进入/退出"点击画布放置评论"模式 */
+  togglePlacingComment: () => void
 }
 
 const seedNodes: CreativeNode[] = [
@@ -222,15 +262,34 @@ function mergeNode(nodes: CreativeNode[], updated: TreeNode): CreativeNode[] {
   )
 }
 
-function fileToGraph(file: ProjectFile): { nodes: CreativeNode[]; edges: Edge[] } {
-  const nodes = file.tree.nodes.map(toCreativeNode)
+/** 画布自由气泡 → 画布节点（type 'comment'，由 canvas/CommentNode.tsx 渲染）。 */
+function toCommentNode(t: CommentThread): CreativeNode {
+  return {
+    id: t.id,
+    type: 'comment',
+    position: t.position ?? { x: 0, y: 0 },
+    data: { label: '评论', thread: t },
+  }
+}
+
+function fileToGraph(file: ProjectFile): {
+  nodes: CreativeNode[]
+  edges: Edge[]
+  nodeComments: Record<string, CommentThread[]>
+} {
+  const ideaNodes = file.tree.nodes.map(toCreativeNode)
+  const commentNodes = (file.comments ?? []).map(toCommentNode)
+  const nodeComments: Record<string, CommentThread[]> = {}
+  for (const n of file.tree.nodes) {
+    nodeComments[n.id] = Array.isArray(n.comments) ? n.comments : []
+  }
   const edges: Edge[] = file.tree.edges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
     animated: true,
   }))
-  return { nodes, edges }
+  return { nodes: [...ideaNodes, ...commentNodes], edges, nodeComments }
 }
 
 /**
@@ -257,7 +316,62 @@ export function computePosition(
   return { x: parent.position.x + CHILD_SPACING_X, y: parent.position.y + siblings * CHILD_SPACING_Y }
 }
 
-export const useTreeStore = create<TreeState>((set, get) => ({
+/** 在状态里按 id 找一条评论 thread（先查节点级映射，再查画布气泡节点）。 */
+function findThread(
+  state: { nodeComments: Record<string, CommentThread[]>; nodes: CreativeNode[] },
+  threadId: string,
+): CommentThread | null {
+  for (const list of Object.values(state.nodeComments)) {
+    const hit = list.find((t) => t.id === threadId)
+    if (hit) return hit
+  }
+  for (const n of state.nodes) {
+    if (n.type === 'comment' && n.data.thread?.id === threadId) return n.data.thread
+  }
+  return null
+}
+
+export const useTreeStore = create<TreeState>((set, get) => {
+  /**
+   * 把某条 thread 的最新内容写回状态：先找节点级评论（nodeComments 映射），
+   * 再找画布气泡节点（nodes 里 type==='comment'）。两处互斥，命中即返回。
+   */
+  const replaceThread = (t: CommentThread) => {
+    const { nodeComments, nodes } = get()
+    for (const [nodeId, list] of Object.entries(nodeComments)) {
+      if (list.some((x) => x.id === t.id)) {
+        set({
+          nodeComments: { ...nodeComments, [nodeId]: list.map((x) => (x.id === t.id ? t : x)) },
+        })
+        return
+      }
+    }
+    set({
+      nodes: nodes.map((n) =>
+        n.id === t.id && n.type === 'comment' ? { ...n, data: { ...n.data, thread: t } } : n,
+      ),
+    })
+  }
+
+  /** 删除某条 thread（节点级或画布气泡），并收起可能打开着的弹层。 */
+  const deleteThread = (threadId: string) => {
+    const { nodeComments, nodes } = get()
+    for (const [nodeId, list] of Object.entries(nodeComments)) {
+      if (list.some((x) => x.id === threadId)) {
+        set({
+          nodeComments: { ...nodeComments, [nodeId]: list.filter((x) => x.id !== threadId) },
+          activeThreadId: null,
+        })
+        return
+      }
+    }
+    set({
+      nodes: nodes.filter((n) => !(n.id === threadId && n.type === 'comment')),
+      activeThreadId: null,
+    })
+  }
+
+  return {
   projectId: null,
   projectName: '我的创意',
   lastSavedAt: null,
@@ -279,6 +393,10 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   aiBusy: false,
   exportOpen: false,
   previewWidth: loadPreviewWidth(),
+  nodeComments: {},
+  activeCommentNodeId: null,
+  activeThreadId: null,
+  placingComment: false,
 
   init: async () => {
     const api = window.diverge
@@ -288,13 +406,17 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     }
     try {
       const [file, generators] = await Promise.all([api.ensureProject(), api.listGenerators()])
-      const { nodes, edges } = fileToGraph(file)
+      const { nodes, edges, nodeComments } = fileToGraph(file)
       set({
         projectId: file.project.id,
         projectName: file.project.name,
         nodes,
         edges,
+        nodeComments,
         generators,
+        activeCommentNodeId: null,
+        activeThreadId: null,
+        placingComment: false,
         selectedNodeId: nodes[0]?.id ?? null,
         error: null,
       })
@@ -377,13 +499,17 @@ export const useTreeStore = create<TreeState>((set, get) => ({
 
   /** 用一份完整项目文件替换当前画布（打开/导入后调用）。 */
   loadProject: (file) => {
-    const { nodes, edges } = fileToGraph(file)
+    const { nodes, edges, nodeComments } = fileToGraph(file)
     set({
       projectId: file.project.id,
       projectName: file.project.name,
       nodes,
       edges,
+      nodeComments,
       selectedNodeId: nodes[0]?.id ?? null,
+      activeCommentNodeId: null,
+      activeThreadId: null,
+      placingComment: false,
       lastSavedAt: null,
       projectPath: null,
       warning: null,
@@ -651,4 +777,167 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     persistPreviewWidth(PREVIEW_WIDTH_DEFAULT)
     set({ previewWidth: PREVIEW_WIDTH_DEFAULT })
   },
-}))
+
+  // ---------------- 评论（气泡）：节点级 + 画布自由气泡 ----------------
+  addNodeComment: async (nodeId, body) => {
+    const text = body.trim()
+    if (!text) return false
+    const { projectId } = get()
+    const api = window.diverge
+    if (!api || !projectId) {
+      // 无主进程（纯浏览器预览）：本地占位，保证功能可用
+      const thread: CommentThread = {
+        id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        nodeId,
+        body: text,
+        createdAt: new Date().toISOString(),
+        replies: [],
+      }
+      set((s) => ({
+        nodeComments: { ...s.nodeComments, [nodeId]: [...(s.nodeComments[nodeId] ?? []), thread] },
+      }))
+      return true
+    }
+    try {
+      const thread = await api.addNodeComment({ projectId, nodeId, body: text })
+      set((s) => ({
+        nodeComments: { ...s.nodeComments, [nodeId]: [...(s.nodeComments[nodeId] ?? []), thread] },
+        error: null,
+      }))
+      return true
+    } catch (e) {
+      set({ error: `添加评论失败：${(e as Error).message}` })
+      return false
+    }
+  },
+
+  addCanvasComment: async (pos) => {
+    set({ placingComment: false }) // 放置是一次性动作，创建后立即退出放置模式
+    const { projectId } = get()
+    const api = window.diverge
+    if (!api || !projectId) {
+      const thread: CommentThread = {
+        id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        position: pos,
+        body: '',
+        createdAt: new Date().toISOString(),
+        replies: [],
+      }
+      set((s) => ({ nodes: [...s.nodes, toCommentNode(thread)], activeThreadId: thread.id }))
+      return true
+    }
+    try {
+      const thread = await api.addCanvasComment({ projectId, x: pos.x, y: pos.y, body: '' })
+      set((s) => ({
+        nodes: [...s.nodes, toCommentNode(thread)],
+        activeThreadId: thread.id, // 新气泡自动打开弹层，用户直接写第一条评论
+        error: null,
+      }))
+      return true
+    } catch (e) {
+      set({ error: `添加评论失败：${(e as Error).message}` })
+      return false
+    }
+  },
+
+  updateCommentBody: async (threadId, body) => {
+    const { projectId } = get()
+    const api = window.diverge
+    const text = body.trim()
+    if (api && projectId) {
+      try {
+        const t = await api.updateCommentBody({ projectId, threadId, body: text })
+        replaceThread(t)
+        set({ error: null })
+        return true
+      } catch (e) {
+        set({ error: `保存评论失败：${(e as Error).message}` })
+        return false
+      }
+    }
+    const cur = findThread(get(), threadId)
+    if (!cur) return false
+    replaceThread({ ...cur, body: text })
+    return true
+  },
+
+  addReply: async (threadId, body) => {
+    const text = body.trim()
+    if (!text) return false
+    const { projectId } = get()
+    const api = window.diverge
+    if (api && projectId) {
+      try {
+        const t = await api.addReply({ projectId, threadId, body: text })
+        replaceThread(t)
+        set({ error: null })
+        return true
+      } catch (e) {
+        set({ error: `回复失败：${(e as Error).message}` })
+        return false
+      }
+    }
+    const cur = findThread(get(), threadId)
+    if (!cur) return false
+    replaceThread({
+      ...cur,
+      replies: [
+        ...cur.replies,
+        { id: `local-${Date.now()}`, body: text, createdAt: new Date().toISOString() },
+      ],
+    })
+    return true
+  },
+
+  removeComment: async (threadId) => {
+    const { projectId } = get()
+    const api = window.diverge
+    deleteThread(threadId) // 本地先删（含收起弹层），落库失败只报错条
+    if (api && projectId) {
+      try {
+        await api.removeComment({ projectId, threadId })
+      } catch (e) {
+        set({ error: `删除评论失败：${(e as Error).message}` })
+      }
+    }
+    return true
+  },
+
+  removeReply: async (threadId, replyId) => {
+    const { projectId } = get()
+    const api = window.diverge
+    const cur = findThread(get(), threadId)
+    if (cur) replaceThread({ ...cur, replies: cur.replies.filter((r) => r.id !== replyId) })
+    if (api && projectId) {
+      try {
+        await api.removeReply({ projectId, threadId, replyId })
+      } catch (e) {
+        set({ error: `删除回复失败：${(e as Error).message}` })
+      }
+    }
+    return true
+  },
+
+  updateCommentPosition: async (threadId, x, y) => {
+    const { projectId } = get()
+    const api = window.diverge
+    if (!api || !projectId) return
+    try {
+      await api.updateCommentPosition({ projectId, threadId, x, y })
+    } catch (e) {
+      set({ error: `保存评论位置失败：${(e as Error).message}` })
+    }
+  },
+
+  setActiveCommentNode: (nodeId) =>
+    set({ activeCommentNodeId: nodeId, activeThreadId: null }),
+  setActiveThread: (threadId) =>
+    set({ activeThreadId: threadId, activeCommentNodeId: null }),
+  togglePlacingComment: () =>
+    set((s) => ({
+      placingComment: !s.placingComment,
+      activeCommentNodeId: null,
+      activeThreadId: null,
+    })),
+  }
+})

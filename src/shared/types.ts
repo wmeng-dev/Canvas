@@ -80,6 +80,8 @@ export interface TreeNode {
   currentVersionId: string | null
   /** 画布坐标（渲染端生成/布局后回写，便于下次打开保持布局） */
   position?: { x: number; y: number }
+  /** 挂在该节点上的评论气泡（节点级讨论） */
+  comments?: CommentThread[]
   createdAt: string
   updatedAt: string
 }
@@ -90,10 +92,39 @@ export interface TreeEdge {
   target: string
 }
 
+/**
+ * 一条评论回复（线程里的后续发言）。
+ */
+export interface CommentReply {
+  id: string
+  body: string
+  createdAt: string
+}
+
+/**
+ * 一个评论气泡 = 一条根评论 + 其回复线程。
+ * - 挂在创意节点上时带 `nodeId`、不带 `position`；
+ * - 画布自由气泡时带 `position`（流坐标）、不带 `nodeId`。
+ * 二者互斥：renderer 据此区分渲染/落盘位置。
+ */
+export interface CommentThread {
+  id: string
+  /** 挂在节点上时填节点 id；画布自由气泡时不填 */
+  nodeId?: string
+  /** 画布自由气泡的流坐标；nodeId 存在时不需要 */
+  position?: { x: number; y: number }
+  /** 气泡里的第一条评论（根） */
+  body: string
+  createdAt: string
+  replies: CommentReply[]
+}
+
 export interface ProjectFile {
   project: Project
   tree: {
     nodes: TreeNode[]
     edges: TreeEdge[]
   }
+  /** 画布自由气泡（不挂在任何节点上，钉在画布坐标） */
+  comments?: CommentThread[]
 }

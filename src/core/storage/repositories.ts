@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { JsonStore } from './store'
 import type {
+  CommentThread,
   IdeaAnalysis,
   NodeVersion,
   Project,
@@ -62,6 +63,13 @@ function migrateNode(n: TreeNode): void {
   if (!n.currentVersionId) {
     n.currentVersionId = n.versions.length ? n.versions[n.versions.length - 1].id : null
   }
+  if (!Array.isArray(n.comments)) n.comments = []
+}
+
+/** 文件级（画布自由气泡）评论列表向后补齐 */
+function migrateComments(file: ProjectFile): void {
+  if (!Array.isArray(file.comments)) file.comments = []
+  for (const n of file.tree.nodes) migrateNode(n)
 }
 
 /**
@@ -90,7 +98,7 @@ export class ProjectRepository {
 
   get(id: string): ProjectFile {
     const file = this.store.read<ProjectFile>(id)
-    for (const n of file.tree.nodes) migrateNode(n)
+    migrateComments(file)
     return file
   }
 
@@ -297,6 +305,122 @@ export class ProjectRepository {
     file.tree.edges = file.tree.edges.filter(
       (e) => e.source !== nodeId && e.target !== nodeId,
     )
+    file.project.updatedAt = nowIso()
+    this.store.write(projectId, file)
+  }
+
+  // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------
+  /**
+   * 在节点评论、画布评论两处定位某个 thread，返回其所在容器与下标。
+   * 删除/回复/改坐标都需要先定位（thread 可能挂在节点上，也可能在画布上）。
+   */
+  private locateThread(
+    file: ProjectFile,
+    threadId: string,
+  ): { container: CommentThread[]; index: number } | null {
+    for (const n of file.tree.nodes) {
+      const list = n.comments ?? []
+      const index = list.findIndex((t) => t.id === threadId)
+      if (index >= 0) return { container: list, index }
+    }
+    const list = file.comments ?? []
+    const index = list.findIndex((t) => t.id === threadId)
+    if (index >= 0) return { container: list, index }
+    return null
+  }
+
+  /** 给某节点加一条评论气泡（根评论），返回新建的 thread */
+  addNodeComment(projectId: string, nodeId: string, body: string): CommentThread {
+    const file = this.get(projectId)
+    const node = file.tree.nodes.find((n) => n.id === nodeId)
+    if (!node) throw new Error(`Node not found: ${nodeId}`)
+    if (!Array.isArray(node.comments)) node.comments = []
+    const thread: CommentThread = {
+      id: randomUUID(),
+      nodeId,
+      body: String(body ?? '').trim(),
+      createdAt: nowIso(),
+      replies: [],
+    }
+    node.comments.push(thread)
+    file.project.updatedAt = nowIso()
+    this.store.write(projectId, file)
+    return thread
+  }
+
+  /** 在画布上某流坐标加一条自由气泡（根评论可为空，随后编辑） */
+  addCanvasComment(projectId: string, x: number, y: number, body: string): CommentThread {
+    const file = this.get(projectId)
+    if (!Array.isArray(file.comments)) file.comments = []
+    const thread: CommentThread = {
+      id: randomUUID(),
+      position: { x, y },
+      body: String(body ?? '').trim(),
+      createdAt: nowIso(),
+      replies: [],
+    }
+    file.comments.push(thread)
+    file.project.updatedAt = nowIso()
+    this.store.write(projectId, file)
+    return thread
+  }
+
+  /** 改某条 thread 的根评论内容（画布气泡刚创建时常为空，用户随后填写） */
+  updateCommentBody(projectId: string, threadId: string, body: string): CommentThread {
+    const file = this.get(projectId)
+    const loc = this.locateThread(file, threadId)
+    if (!loc) throw new Error(`Comment thread not found: ${threadId}`)
+    const thread = loc.container[loc.index]
+    thread.body = String(body ?? '').trim()
+    file.project.updatedAt = nowIso()
+    this.store.write(projectId, file)
+    return thread
+  }
+
+  /** 给某条 thread 追加一条回复，返回更新后的 thread */
+  addReply(projectId: string, threadId: string, body: string): CommentThread {
+    const file = this.get(projectId)
+    const loc = this.locateThread(file, threadId)
+    if (!loc) throw new Error(`Comment thread not found: ${threadId}`)
+    const thread = loc.container[loc.index]
+    thread.replies.push({
+      id: randomUUID(),
+      body: String(body ?? '').trim(),
+      createdAt: nowIso(),
+    })
+    file.project.updatedAt = nowIso()
+    this.store.write(projectId, file)
+    return thread
+  }
+
+  /** 删除整条 thread（含其回复） */
+  removeComment(projectId: string, threadId: string): void {
+    const file = this.get(projectId)
+    const loc = this.locateThread(file, threadId)
+    if (!loc) return
+    loc.container.splice(loc.index, 1)
+    file.project.updatedAt = nowIso()
+    this.store.write(projectId, file)
+  }
+
+  /** 删除 thread 里的某条回复 */
+  removeReply(projectId: string, threadId: string, replyId: string): void {
+    const file = this.get(projectId)
+    const loc = this.locateThread(file, threadId)
+    if (!loc) return
+    const thread = loc.container[loc.index]
+    thread.replies = thread.replies.filter((r) => r.id !== replyId)
+    file.project.updatedAt = nowIso()
+    this.store.write(projectId, file)
+  }
+
+  /** 自由气泡拖动后回写流坐标 */
+  updateCommentPosition(projectId: string, threadId: string, x: number, y: number): void {
+    const file = this.get(projectId)
+    const loc = this.locateThread(file, threadId)
+    if (!loc) return
+    const thread = loc.container[loc.index]
+    thread.position = { x, y }
     file.project.updatedAt = nowIso()
     this.store.write(projectId, file)
   }

@@ -1,7 +1,7 @@
 // C.3/C.5 跨进程 IPC 契约：主进程 handler / preload / 渲染端 共用同一套类型与频道名。
 // 渲染端通过 window.diverge 访问（见 preload.ts）。
 
-import type { ContentType, ProjectFile, TreeEdge, TreeNode } from './types'
+import type { CommentThread, ContentType, ProjectFile, TreeEdge, TreeNode } from './types'
 import type { AiSettingsView } from './settings'
 
 export const IPC = {
@@ -15,6 +15,14 @@ export const IPC = {
   saveProjectAs: 'diverge:saveProjectAs',
   /** "打开"：从用户选定的 .json 导入一个项目文件 */
   openProject: 'diverge:openProject',
+  // ---------- 评论（气泡）：节点级 + 画布自由气泡 ----------
+  addNodeComment: 'diverge:addNodeComment',
+  addCanvasComment: 'diverge:addCanvasComment',
+  updateCommentBody: 'diverge:updateCommentBody',
+  addReply: 'diverge:addReply',
+  removeComment: 'diverge:removeComment',
+  removeReply: 'diverge:removeReply',
+  updateCommentPosition: 'diverge:updateCommentPosition',
   generateNode: 'diverge:generateNode',
   regenerateNode: 'diverge:regenerateNode',
   updateNodePrompt: 'diverge:updateNodePrompt',
@@ -156,6 +164,58 @@ export interface OpenProjectResponse {
   error?: string
 }
 
+// ---------- 评论（气泡）请求 ----------
+
+/** 给某节点加一条评论气泡 */
+export interface AddNodeCommentRequest {
+  projectId: string
+  nodeId: string
+  body: string
+}
+
+/** 在画布上（流坐标）加一条自由气泡 */
+export interface AddCanvasCommentRequest {
+  projectId: string
+  x: number
+  y: number
+  body: string
+}
+
+/** 改某条 thread 的根评论内容 */
+export interface UpdateCommentBodyRequest {
+  projectId: string
+  threadId: string
+  body: string
+}
+
+/** 给某条 thread 追加回复 */
+export interface AddReplyRequest {
+  projectId: string
+  threadId: string
+  body: string
+}
+
+/** 删除整条 thread（含回复） */
+export interface RemoveCommentRequest {
+  projectId: string
+  threadId: string
+}
+
+/** 删除某条回复 */
+export interface RemoveReplyRequest {
+  projectId: string
+  threadId: string
+  replyId: string
+}
+
+/** 自由气泡拖动后回写流坐标 */
+export interface UpdateCommentPositionRequest {
+  projectId: string
+  threadId: string
+  x: number
+  y: number
+}
+
 /** preload 暴露到 window.diverge 的 API 面 */
 export interface DivergeApi {
   listGenerators(): Promise<GeneratorInfo[]>
@@ -173,6 +233,22 @@ export interface DivergeApi {
   /** 只保存描述（不生成）；返回更新后的节点 */
   updateNodePrompt(req: UpdateNodePromptRequest): Promise<TreeNode>
   setNodeVersion(req: SetNodeVersionRequest): Promise<TreeNode>
+
+  // --- 评论（气泡）：节点级 + 画布自由气泡 ---
+  /** 给节点加评论气泡；返回新建的 thread */
+  addNodeComment(req: AddNodeCommentRequest): Promise<CommentThread>
+  /** 画布自由气泡；返回新建的 thread（body 可为空，随后 updateCommentBody 填写） */
+  addCanvasComment(req: AddCanvasCommentRequest): Promise<CommentThread>
+  /** 改 thread 根评论；返回更新后的 thread */
+  updateCommentBody(req: UpdateCommentBodyRequest): Promise<CommentThread>
+  /** 追加回复；返回更新后的 thread */
+  addReply(req: AddReplyRequest): Promise<CommentThread>
+  /** 删除整条 thread */
+  removeComment(req: RemoveCommentRequest): Promise<void>
+  /** 删除某条回复 */
+  removeReply(req: RemoveReplyRequest): Promise<void>
+  /** 自由气泡拖动后回写坐标 */
+  updateCommentPosition(req: UpdateCommentPositionRequest): Promise<void>
 
   // --- C.6 AI 后端设置 ---
   getAiSettings(): Promise<AiSettingsView>
