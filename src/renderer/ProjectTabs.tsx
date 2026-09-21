@@ -1,10 +1,13 @@
 // 画布 tab 条：一张画布一个 tab，点击切换，末尾「＋」新建空白画布。
 // 当前 tab 里内嵌可编辑的画布名（= 顶栏原来的 project-name 输入框，搬到这里避免名字显示两遍）。
+//
+// 最左边是「历史画布」按钮：点开左侧抽屉（HistoryDrawer），列出**全部**画布文件供打开。
+// 抽屉由 App 渲染（要覆盖在画布区域上），这里只负责触发，所以 open 状态不放在本组件里。
 
 import { useEffect, useRef, useState } from 'react'
 import { useTreeStore } from './store/treeStore'
 
-export function ProjectTabs() {
+export function ProjectTabs({ onOpenHistory }: { onOpenHistory: () => void }) {
   const projects = useTreeStore((s) => s.projects)
   const projectId = useTreeStore((s) => s.projectId)
   const projectName = useTreeStore((s) => s.projectName)
@@ -14,7 +17,6 @@ export function ProjectTabs() {
   const renameProject = useTreeStore((s) => s.renameProject)
   const closedProjects = useTreeStore((s) => s.closedProjects)
   const closeProject = useTreeStore((s) => s.closeProject)
-  const reopenProject = useTreeStore((s) => s.reopenProject)
 
   /**
    * 当前画布的节点数**用本地实时值**：`projects` 是后端返回的快照，生成/删节点后不会自动刷新，
@@ -24,17 +26,6 @@ export function ProjectTabs() {
   const liveCount = useTreeStore((s) => s.nodes.filter((n) => n.type !== 'comment').length)
 
   const [nameDraft, setNameDraft] = useState(projectName)
-  // 「已关闭」菜单开关；点菜单外任意处收起
-  const [closedOpen, setClosedOpen] = useState(false)
-  const closedRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!closedOpen) return
-    const onDown = (e: MouseEvent) => {
-      if (closedRef.current && !closedRef.current.contains(e.target as Node)) setClosedOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [closedOpen])
   useEffect(() => {
     setNameDraft(projectName)
   }, [projectName])
@@ -76,6 +67,19 @@ export function ProjectTabs() {
         flex: '0 0 auto',
       }}
     >
+      {/* 「历史画布」在 tab 条最左边：点开左侧抽屉，可挑任意历史画布打开（含已关闭的） */}
+      <button
+        data-testid="history-canvases-toggle"
+        className="project-tab-history"
+        onClick={onOpenHistory}
+        title="历史画布：所有画布文件（含已关闭的，数据都还在）"
+      >
+        历史画布
+        <span className="project-tab-history__count" data-testid="history-closed-count">
+          {closedProjects.length}
+        </span>
+      </button>
+
       {tabs.map((p) => {
         const active = p.id === projectId
         return (
@@ -139,40 +143,6 @@ export function ProjectTabs() {
         {switchingProject ? '切换中…' : '＋ 新建画布'}
       </button>
 
-      <div className="project-tabs__closed" ref={closedRef}>
-        <button
-          data-testid="closed-canvases-toggle"
-          className="project-tab-closed"
-          disabled={switchingProject}
-          onClick={() => setClosedOpen((v) => !v)}
-          title="已关闭的画布（数据仍在，可重新打开）"
-        >
-          已关闭 {closedProjects.length}
-        </button>
-        {closedOpen && (
-          <div className="closed-menu" data-testid="closed-menu" data-count={closedProjects.length}>
-            {closedProjects.length === 0 && (
-              <div className="closed-menu__empty">还没有关闭的画布</div>
-            )}
-            {closedProjects.map((p) => (
-              <button
-                key={p.id}
-                className="closed-menu__item"
-                data-testid="closed-canvas-item"
-                data-project-id={p.id}
-                title={`重新打开「${p.name}」`}
-                onClick={() => {
-                  setClosedOpen(false)
-                  void reopenProject(p.id)
-                }}
-              >
-                <span className="closed-menu__name">{p.name}</span>
-                <span className="closed-menu__count">{p.nodeCount}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }

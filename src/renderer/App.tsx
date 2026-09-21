@@ -1,9 +1,10 @@
 // C.3/C.5/D.1 应用外壳：顶栏 + 画布 + 预览面板 + 生成对话框 + 导出对话框 + 节点右键菜单。
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { CreativeTree } from './canvas/CreativeTree'
 import { ProjectTabs } from './ProjectTabs'
+import { HistoryDrawer } from './HistoryDrawer'
 import { NodeContextMenu } from './canvas/NodeContextMenu'
 import { PreviewPanel } from './panels/PreviewPanel'
 import { AiSettingsPanel } from './panels/AiSettingsPanel'
@@ -43,6 +44,9 @@ export function App() {
   const savedLabel = lastSavedAt
     ? `已保存 ${new Date(lastSavedAt).toLocaleTimeString('zh-CN', { hour12: false })}`
     : null
+
+  /** 左侧「历史画布」抽屉是否展开（覆盖在画布上，不挤占宽度）。 */
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   useEffect(() => {
     void init()
@@ -143,7 +147,7 @@ export function App() {
         </header>
 
         {/* 画布 tab 条：切画布 + 新建空白画布；当前 tab 里内嵌画布名（可改） */}
-        <ProjectTabs />
+        <ProjectTabs onOpenHistory={() => setHistoryOpen(true)} />
 
         {error && (
           <div
@@ -179,7 +183,20 @@ export function App() {
           </div>
         )}
 
-        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+          {/*
+            历史画布抽屉：**覆盖**在画布上（不是挤占宽度）——
+            React Flow 对容器尺寸变化敏感，push 布局会白白触发一次重排/重测。
+            遮罩兼作"点外面收起"。
+          */}
+          {historyOpen && (
+            <div
+              className="history-backdrop"
+              data-testid="history-backdrop"
+              onClick={() => setHistoryOpen(false)}
+            />
+          )}
+          <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <CreativeTree />
           </div>
