@@ -77,6 +77,10 @@ interface ContextMenuState {
 interface TreeState {
   projectId: string | null
   projectName: string
+  /** 最近一次成功保存的时间戳（ISO），用于顶栏展示"已保存"反馈 */
+  lastSavedAt: string | null
+  /** 最近一次"另存为"写出的文件路径（展示用） */
+  projectPath: string | null
   nodes: CreativeNode[]
   edges: Edge[]
   selectedNodeId: string | null
@@ -111,6 +115,14 @@ interface TreeState {
   previewWidth: number
 
   init: () => Promise<void>
+
+  // --- 项目文件：重命名 / 保存 / 另存为 / 打开 ---
+  renameProject: (name: string) => Promise<void>
+  saveProject: () => Promise<void>
+  saveProjectAs: () => Promise<void>
+  openProject: () => Promise<void>
+  /** 用一份完整项目文件替换当前画布（打开/导入后调用） */
+  loadProject: (file: ProjectFile) => void
 
   onNodesChange: (changes: NodeChange<CreativeNode>[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
@@ -248,6 +260,8 @@ export function computePosition(
 export const useTreeStore = create<TreeState>((set, get) => ({
   projectId: null,
   projectName: '我的创意',
+  lastSavedAt: null,
+  projectPath: null,
   nodes: seedNodes,
   edges: [],
   selectedNodeId: null,
@@ -287,6 +301,94 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     } catch (e) {
       set({ error: `加载项目失败：${(e as Error).message}` })
     }
+  },
+
+  // ---------------- 项目文件：重命名 / 保存 / 另存为 / 打开 ----------------
+  renameProject: async (name) => {
+    const { projectId } = get()
+    const api = window.diverge
+    if (!api || !projectId) {
+      set({ error: '需要主进程支持才能重命名。' })
+      return
+    }
+    try {
+      const file = await api.renameProject({ projectId, name: name.trim() || '未命名创意' })
+      set({ projectName: file.project.name, error: null })
+    } catch (e) {
+      set({ error: `重命名失败：${(e as Error).message}` })
+    }
+  },
+
+  saveProject: async () => {
+    const { projectId } = get()
+    const api = window.diverge
+    if (!api || !projectId) {
+      set({ error: '需要主进程支持才能保存。' })
+      return
+    }
+    try {
+      const { savedAt } = await api.saveProject({ projectId })
+      set({ lastSavedAt: savedAt, projectPath: null, error: null })
+    } catch (e) {
+      set({ error: `保存失败：${(e as Error).message}` })
+    }
+  },
+
+  saveProjectAs: async () => {
+    const { projectId, projectName } = get()
+    const api = window.diverge
+    if (!api || !projectId) {
+      set({ error: '需要主进程支持才能导出项目文件。' })
+      return
+    }
+    try {
+      const res = await api.saveProjectAs({
+        projectId,
+        suggestedName: `${projectName || 'diverge-project'}.json`,
+      })
+      if (res.saved && res.path) {
+        set({ lastSavedAt: new Date().toISOString(), projectPath: res.path, error: null })
+      } else if (!res.saved && res.error) {
+        set({ error: `保存失败：${res.error}` })
+      }
+    } catch (e) {
+      set({ error: `保存失败：${(e as Error).message}` })
+    }
+  },
+
+  openProject: async () => {
+    const api = window.diverge
+    if (!api) {
+      set({ error: '需要主进程支持才能打开项目。' })
+      return
+    }
+    try {
+      const res = await api.openProject()
+      if (res.opened && res.file) {
+        get().loadProject(res.file)
+        set({ error: null })
+      } else if (res.error) {
+        set({ error: `打开失败：${res.error}` })
+      }
+    } catch (e) {
+      set({ error: `打开失败：${(e as Error).message}` })
+    }
+  },
+
+  /** 用一份完整项目文件替换当前画布（打开/导入后调用）。 */
+  loadProject: (file) => {
+    const { nodes, edges } = fileToGraph(file)
+    set({
+      projectId: file.project.id,
+      projectName: file.project.name,
+      nodes,
+      edges,
+      selectedNodeId: nodes[0]?.id ?? null,
+      lastSavedAt: null,
+      projectPath: null,
+      warning: null,
+      error: null,
+    })
   },
 
   onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) }),

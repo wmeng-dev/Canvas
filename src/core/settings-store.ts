@@ -55,6 +55,50 @@ const SETTINGS_FILE = 'settings.json'
 
 const EMPTY: AiSettings = { mcpServers: [] }
 
+/** 应用级状态（与 AI 设置分开持久化，避免污染 AiSettings 语义）。 */
+export interface AppState {
+  /** 上次打开/创建的项目 id；启动时优先恢复它，实现"下次打开修改" */
+  lastProjectId?: string
+}
+
+const EMPTY_STATE: AppState = {}
+
+/** 应用状态持久化：<baseDir>/app-state.json（临时文件 + rename 原子替换）。 */
+export class AppStateStore {
+  private readonly file: string
+
+  constructor(baseDir: string) {
+    this.file = path.join(path.resolve(baseDir), 'app-state.json')
+  }
+
+  get path(): string {
+    return this.file
+  }
+
+  read(): AppState {
+    if (!fs.existsSync(this.file)) return { ...EMPTY_STATE }
+    try {
+      const raw = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as Partial<AppState>
+      return { lastProjectId: raw.lastProjectId }
+    } catch {
+      return { ...EMPTY_STATE }
+    }
+  }
+
+  write(state: AppState): void {
+    fs.mkdirSync(path.dirname(this.file), { recursive: true })
+    const tmp = `${this.file}.${process.pid}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf-8')
+    fs.renameSync(tmp, this.file)
+  }
+
+  update(mutate: (s: AppState) => AppState): AppState {
+    const next = mutate(this.read())
+    this.write(next)
+    return next
+  }
+}
+
 /** 设置文件存储：<baseDir>/settings.json（临时文件 + rename 原子替换）。 */
 export class SettingsStore {
   private readonly file: string

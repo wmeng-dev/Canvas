@@ -7,7 +7,7 @@ import { GeneratorRegistry } from './generator/types'
 import { DeepSeekGenerator } from './generator/direct/deepseek'
 import { createFakeGenerator } from './generator/fake'
 import { McpClientManager } from './mcp/McpClientManager'
-import { SettingsStore, plaintextSecretBox, openSecret } from './settings-store'
+import { SettingsStore, AppStateStore, plaintextSecretBox, openSecret } from './settings-store'
 import type { SecretBox } from './settings-store'
 import type { ProjectFile } from '../shared/types'
 import type { McpServerStatus, McpServerTemplate } from '../shared/settings'
@@ -16,6 +16,8 @@ export interface AppServices {
   repo: ProjectRepository
   registry: GeneratorRegistry
   settings: SettingsStore
+  /** 应用级状态（上次项目等），与 AI 设置分开 */
+  appState: AppStateStore
   secrets: SecretBox
   mcp: McpClientManager
   dataDir: string
@@ -48,6 +50,7 @@ export interface CreateServicesOptions {
 export function createServices(opts: CreateServicesOptions): AppServices {
   const repo = new ProjectRepository(new JsonStore({ baseDir: opts.dataDir }))
   const settings = new SettingsStore(opts.dataDir)
+  const appState = new AppStateStore(opts.dataDir)
   const secrets = opts.secrets ?? plaintextSecretBox()
   const registry = new GeneratorRegistry()
 
@@ -63,6 +66,7 @@ export function createServices(opts: CreateServicesOptions): AppServices {
     repo,
     registry,
     settings,
+    appState,
     secrets,
     mcp: new McpClientManager(),
     dataDir: opts.dataDir,
@@ -73,10 +77,24 @@ export function createServices(opts: CreateServicesOptions): AppServices {
   }
 }
 
-/** 返回第一个项目；没有则创建一个带根节点的项目。 */
+/**
+ * 返回"当前应打开的项目"：
+ * 1. 优先恢复上次打开/创建的项目（appState.lastProjectId，实现"下次打开修改"）；
+ * 2. 否则取库里第一个项目；
+ * 3. 库为空则创建一个带根节点的 "我的创意"。
+ * 选定后都会把 lastProjectId 写回，保证重启能恢复同一项目。
+ */
 export function ensureProject(svc: AppServices): ProjectFile {
+  const lastId = svc.appState.read().lastProjectId
+  if (lastId && svc.repo.exists(lastId)) {
+    return svc.repo.get(lastId)
+  }
   const list = svc.repo.list()
-  if (list.length > 0) return svc.repo.get(list[0].id)
+  if (list.length > 0) {
+    const file = svc.repo.get(list[0].id)
+    svc.appState.update((s) => ({ ...s, lastProjectId: file.project.id }))
+    return file
+  }
 
   const file = svc.repo.create('我的创意')
   svc.repo.addNode(file.project.id, {
@@ -85,5 +103,7 @@ export function ensureProject(svc: AppServices): ProjectFile {
     status: 'empty',
     position: { x: 0, y: 0 },
   })
-  return svc.repo.get(file.project.id)
+  const created = svc.repo.get(file.project.id)
+  svc.appState.update((s) => ({ ...s, lastProjectId: created.project.id }))
+  return created
 }

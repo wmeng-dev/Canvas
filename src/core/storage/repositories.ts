@@ -113,6 +113,37 @@ export class ProjectRepository {
     this.store.delete(id)
   }
 
+  /** 项目文件是否存在（按 id） */
+  exists(id: string): boolean {
+    return this.store.exists(id)
+  }
+
+  /**
+   * "另存为"的反向：把一个外部读入的 ProjectFile 落库（按文件里自带的 id）。
+   * - 缺 id 时自动补一个，保证可后续自动保存；
+   * - 直接走底层 JsonStore 写入（保留文件里的全部节点/边/版本，不丢历史）；
+   * - 返回时经 get() 跑一遍 migrateNode，保证渲染端拿到的是补齐后的完整结构。
+   */
+  importExternal(file: ProjectFile): ProjectFile {
+    if (!file || typeof file !== 'object' || !file.project || !Array.isArray(file.tree?.nodes)) {
+      throw new Error('不是有效的 Diverge 项目文件')
+    }
+    if (!file.project.id) file.project.id = randomUUID()
+    this.store.write(file.project.id, file)
+    return this.get(file.project.id)
+  }
+
+  /**
+   * 显式"保存"：把当前项目（按 id 重新读出再写回）刷一次盘。
+   * 自动保存在每次变更时已经发生，这里主要提供一个"主动落盘 + 确认"的入口，
+   * 并让"保存"按钮有确定可观测的写盘动作。
+   */
+  persist(id: string): ProjectFile {
+    const file = this.get(id)
+    this.store.write(id, file)
+    return file
+  }
+
   // ---------- 节点管理 ----------
   addNode(projectId: string, input: NewNodeInput): TreeNode {
     const file = this.get(projectId)

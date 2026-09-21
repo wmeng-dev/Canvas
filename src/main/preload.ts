@@ -7,8 +7,12 @@ import type {
   AddMcpServerRequest,
   DivergeApi,
   GenerateNodeRequest,
+  OpenProjectResponse,
+  RenameProjectRequest,
   RegenerateNodeRequest,
   SaveExportRequest,
+  SaveProjectAsRequest,
+  SaveProjectRequest,
   SetNodeVersionRequest,
   UpdateNodePromptRequest,
 } from '../shared/ipc'
@@ -16,6 +20,10 @@ import type {
 const api: DivergeApi = {
   listGenerators: () => ipcRenderer.invoke(IPC.listGenerators),
   ensureProject: () => ipcRenderer.invoke(IPC.ensureProject),
+  renameProject: (req: RenameProjectRequest) => ipcRenderer.invoke(IPC.renameProject, req),
+  saveProject: (req: SaveProjectRequest) => ipcRenderer.invoke(IPC.saveProject, req),
+  saveProjectAs: (req: SaveProjectAsRequest) => ipcRenderer.invoke(IPC.saveProjectAs, req),
+  openProject: (): Promise<OpenProjectResponse> => ipcRenderer.invoke(IPC.openProject),
   generateNode: (req: GenerateNodeRequest) => ipcRenderer.invoke(IPC.generateNode, req),
   regenerateNode: (req: RegenerateNodeRequest) => ipcRenderer.invoke(IPC.regenerateNode, req),
   updateNodePrompt: (req: UpdateNodePromptRequest) =>

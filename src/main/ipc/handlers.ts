@@ -7,12 +7,17 @@ import { IPC } from '../../shared/ipc'
 import type {
   AddMcpServerRequest,
   GenerateNodeRequest,
+  OpenProjectResponse,
   RegenerateNodeRequest,
+  RenameProjectRequest,
   SaveExportRequest,
+  SaveProjectAsRequest,
+  SaveProjectRequest,
   SetNodeVersionRequest,
   UpdateNodePromptRequest,
 } from '../../shared/ipc'
 import type { AiSettingsView } from '../../shared/settings'
+import type { ProjectFile } from '../../shared/types'
 import { ensureProject } from '../../core/services'
 import type { AppServices } from '../../core/services'
 import { generateNode, regenerateNode } from '../../core/generate-node'
@@ -25,12 +30,68 @@ async function syncAndView(svc: AppServices): Promise<AiSettingsView> {
   return buildSettingsView(svc)
 }
 
+/** 文件名非法字符清洗（对话框 defaultPath 仅作建议，这里再兜一层避免写入失败）。 */
+function sanitizeFileName(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim()
+}
+
 export function registerIpcHandlers(svc: AppServices): void {
   ipcMain.handle(IPC.listGenerators, () =>
     svc.registry.list().map((g) => ({ id: g.id, label: g.label, kind: g.kind })),
   )
 
   ipcMain.handle(IPC.ensureProject, () => ensureProject(svc))
+
+  // ---------- 项目文件：重命名 / 保存 / 另存为 / 打开 ----------
+  ipcMain.handle(IPC.renameProject, (_evt, req: RenameProjectRequest) =>
+    svc.repo.rename(req.projectId, req.name),
+  )
+
+  // 显式"保存"：重新落盘当前项目，返回落盘时间戳。
+  ipcMain.handle(IPC.saveProject, (_evt, req: SaveProjectRequest) => {
+    svc.repo.persist(req.projectId)
+    return { savedAt: new Date().toISOString() }
+  })
+
+  // "另存为"：把完整项目文件导出到用户选定的路径（系统保存对话框）。
+  ipcMain.handle(IPC.saveProjectAs, async (evt, req: SaveProjectAsRequest) => {
+    const file = svc.repo.get(req.projectId)
+    const content = JSON.stringify(file, null, 2)
+    const suggestedName = sanitizeFileName(req.suggestedName || `${file.project.name || 'diverge-project'}.json`)
+    const filters = [{ name: 'Diverge 项目', extensions: ['json'] }]
+    const parent = BrowserWindow.fromWebContents(evt.sender)
+    const result = parent
+      ? await dialog.showSaveDialog(parent, { defaultPath: suggestedName, filters })
+      : await dialog.showSaveDialog({ defaultPath: suggestedName, filters })
+    if (result.canceled || !result.filePath) return { saved: false }
+    try {
+      await fs.promises.writeFile(result.filePath, content, 'utf-8')
+      return { saved: true, path: result.filePath }
+    } catch (e) {
+      return { saved: false, error: (e as Error).message }
+    }
+  })
+
+  // "打开"：从用户选定的 .json 导入项目，落库并设为 lastProjectId。
+  ipcMain.handle(IPC.openProject, async (evt): Promise<OpenProjectResponse> => {
+    const filters = [{ name: 'Diverge 项目', extensions: ['json'] }]
+    const parent = BrowserWindow.fromWebContents(evt.sender)
+    const result = parent
+      ? await dialog.showOpenDialog(parent, { properties: ['openFile'], filters })
+      : await dialog.showOpenDialog({ properties: ['openFile'], filters })
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return { opened: false }
+    }
+    try {
+      const raw = await fs.promises.readFile(result.filePaths[0], 'utf-8')
+      const file = JSON.parse(raw) as ProjectFile
+      const imported = svc.repo.importExternal(file)
+      svc.appState.update((s) => ({ ...s, lastProjectId: imported.project.id }))
+      return { opened: true, file: imported }
+    } catch (e) {
+      return { opened: false, error: (e as Error).message }
+    }
+  })
 
   ipcMain.handle(IPC.generateNode, (_evt, req: GenerateNodeRequest) => generateNode(svc, req))
 

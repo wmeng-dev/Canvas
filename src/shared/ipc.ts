@@ -7,6 +7,14 @@ import type { AiSettingsView } from './settings'
 export const IPC = {
   listGenerators: 'diverge:listGenerators',
   ensureProject: 'diverge:ensureProject',
+  /** 重命名当前项目（仅改 project.name，便于在库里识别） */
+  renameProject: 'diverge:renameProject',
+  /** 显式"保存"：把当前项目重新落盘（自动保存已在每次变更时发生，这里是主动确认/刷新） */
+  saveProject: 'diverge:saveProject',
+  /** "另存为"：导出一份完整项目文件（ProjectFile）到用户选定的路径 */
+  saveProjectAs: 'diverge:saveProjectAs',
+  /** "打开"：从用户选定的 .json 导入一个项目文件 */
+  openProject: 'diverge:openProject',
   generateNode: 'diverge:generateNode',
   regenerateNode: 'diverge:regenerateNode',
   updateNodePrompt: 'diverge:updateNodePrompt',
@@ -112,10 +120,54 @@ export interface SaveExportResponse {
   error?: string
 }
 
+/** 重命名当前项目 */
+export interface RenameProjectRequest {
+  projectId: string
+  name: string
+}
+
+/** 显式"保存"：重新落盘当前项目，返回落盘时间戳 */
+export interface SaveProjectRequest {
+  projectId: string
+}
+export interface SaveProjectResponse {
+  savedAt: string
+}
+
+/** "另存为"：导出完整项目文件到用户选定路径 */
+export interface SaveProjectAsRequest {
+  projectId: string
+  /** 建议文件名（对话框里可改），不含非法字符 */
+  suggestedName: string
+}
+export interface SaveProjectAsResponse {
+  saved: boolean
+  /** 用户取消时为 undefined */
+  path?: string
+  error?: string
+}
+
+/** "打开"：从用户选定的 .json 导入项目 */
+export interface OpenProjectResponse {
+  opened: boolean
+  /** 导入成功后的项目文件（渲染端据此载入画布） */
+  file?: ProjectFile
+  /** 文件损坏/格式不对/读取失败时的原因 */
+  error?: string
+}
+
 /** preload 暴露到 window.diverge 的 API 面 */
 export interface DivergeApi {
   listGenerators(): Promise<GeneratorInfo[]>
   ensureProject(): Promise<ProjectFile>
+  /** 重命名当前项目；返回同步后的项目文件 */
+  renameProject(req: RenameProjectRequest): Promise<ProjectFile>
+  /** 显式"保存"当前项目；返回落盘时间戳 */
+  saveProject(req: SaveProjectRequest): Promise<SaveProjectResponse>
+  /** "另存为"：导出完整项目文件到用户选定路径 */
+  saveProjectAs(req: SaveProjectAsRequest): Promise<SaveProjectAsResponse>
+  /** "打开"：从用户选定的 .json 导入项目，返回导入后的项目文件 */
+  openProject(): Promise<OpenProjectResponse>
   generateNode(req: GenerateNodeRequest): Promise<GenerateChildrenResponse>
   regenerateNode(req: RegenerateNodeRequest): Promise<TreeNode>
   /** 只保存描述（不生成）；返回更新后的节点 */
