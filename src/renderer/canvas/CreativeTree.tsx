@@ -65,6 +65,7 @@ export function CreativeTree() {
   const placingComment = useTreeStore((s) => s.placingComment)
   const addCanvasComment = useTreeStore((s) => s.addCanvasComment)
   const updateCommentPosition = useTreeStore((s) => s.updateCommentPosition)
+  const setNodePosition = useTreeStore((s) => s.setNodePosition)
   const setActiveCommentNode = useTreeStore((s) => s.setActiveCommentNode)
   const setActiveThread = useTreeStore((s) => s.setActiveThread)
   const togglePlacingComment = useTreeStore((s) => s.togglePlacingComment)
@@ -304,7 +305,7 @@ export function CreativeTree() {
           if (over !== dragOverTrash) setDragOverTrash(over)
         }}
         onNodeDragStop={(evt, node, dragged) => {
-          // 自由气泡拖完把流坐标写回项目文件（普通 idea 节点的拖拽位置本就不落盘，行为一致地不管）
+          // 自由气泡拖完把流坐标写回项目文件
           if (node.type === 'comment') {
             void updateCommentPosition(node.id, node.position.x, node.position.y)
             return
@@ -313,9 +314,14 @@ export function CreativeTree() {
           const p = clientPointOf(evt)
           const over = p ? hitTrash(p.x, p.y) : false
           setDragOverTrash(false)
-          if (!over) return
-          const batch = (dragged ?? [node]).filter((n) => n.type !== 'comment')
-          for (const n of batch) void archiveNode(n.id)
+          if (over) {
+            const batch = (dragged ?? [node]).filter((n) => n.type !== 'comment')
+            for (const n of batch) void archiveNode(n.id)
+            return
+          }
+          // 普通 idea 节点：把拖完的流坐标写盘，重进画布保持位置（单节点或整批多选都落）
+          const moved = (dragged ?? [node]).filter((n) => n.type !== 'comment')
+          for (const n of moved) void setNodePosition(n.id, n.position.x, n.position.y)
         }}
         onPaneClick={(e) => {
           closeMenu()

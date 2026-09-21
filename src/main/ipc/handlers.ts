@@ -20,6 +20,7 @@ import type {
   CreateProjectRequest,
   GenerateProposalRequest,
   SetNodeColorRequest,
+  SetNodePositionRequest,
   SwitchProjectRequest,
   CloseProjectRequest,
   ReopenProjectRequest,
@@ -142,6 +143,13 @@ export function registerIpcHandlers(svc: AppServices): void {
 
   ipcMain.handle(IPC.setNodeColor, (_evt, req: SetNodeColorRequest) =>
     svc.repo.setNodeColor(req.projectId, req.nodeId, req.color ?? null),
+  )
+
+  // idea 节点拖动后回写流坐标（persist 真实坐标，重进画布保持位置）
+  ipcMain.handle(IPC.setNodePosition, (_evt, req: SetNodePositionRequest) =>
+    svc.repo.updateNode(req.projectId, req.nodeId, {
+      position: { x: Number(req.x) || 0, y: Number(req.y) || 0 },
+    }),
   )
 
   // ---------- 画布 tab 条：列出 / 新建 / 切换 ----------

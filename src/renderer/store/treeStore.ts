@@ -261,6 +261,8 @@ interface TreeState {
   removeComment: (threadId: string) => Promise<boolean>
   /** 自由气泡拖动后回写坐标（静默失败只报错条） */
   updateCommentPosition: (threadId: string, x: number, y: number) => Promise<void>
+  /** idea 节点拖动后回写坐标（持久化） */
+  setNodePosition: (nodeId: string, x: number, y: number) => Promise<void>
   /** 打开/关闭某 idea 节点的评论弹层（互斥地关闭画布气泡弹层） */
   setActiveCommentNode: (nodeId: string | null) => void
   /** 打开/关闭某画布气泡的评论弹层（互斥地关闭节点弹层） */
@@ -1228,6 +1230,17 @@ const createdTreeStore = create<TreeState>((set, get) => {
       await api.updateCommentPosition({ projectId, threadId, x, y })
     } catch (e) {
       set({ error: `保存评论位置失败：${(e as Error).message}` })
+    }
+  },
+
+  setNodePosition: async (nodeId, x, y) => {
+    const { projectId } = get()
+    const api = window.ideasprout
+    if (!api || !projectId) return
+    try {
+      await api.setNodePosition({ projectId, nodeId, x, y })
+    } catch (e) {
+      set({ error: `保存节点位置失败：${(e as Error).message}` })
     }
   },
 
