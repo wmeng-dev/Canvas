@@ -2,6 +2,8 @@
 //
 // 渲染放渲染端（html 复用预览组件；markdown 走 core 纯函数），主进程只负责系统保存对话框 + 落盘。
 // 项目快照通过 ensureProject() 现取（该调用幂等），保证导出的是磁盘上的权威内容。
+//
+// 外观照 styles.css 的 `.dialog-backdrop > .dialog(--wide)` 约定写，不写内联外观样式。
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTreeStore } from '../store/treeStore'
@@ -9,16 +11,6 @@ import { buildOutline, renderMarkdown, suggestedFileName } from '../../core/expo
 import type { ExportFormat, ExportScope } from '../../core/export'
 import { renderStandaloneHtml } from '../export/standaloneHtml'
 import type { ProjectFile } from '../../shared/types'
-
-const labelStyle: React.CSSProperties = { fontSize: 12, color: '#7d8590' }
-const fieldStyle: React.CSSProperties = {
-  background: '#010409',
-  color: '#e6edf3',
-  border: '1px solid #30363d',
-  borderRadius: 6,
-  padding: '6px 8px',
-  fontSize: 12,
-}
 
 export function ExportDialog() {
   const open = useTreeStore((s) => s.exportOpen)
@@ -105,46 +97,32 @@ export function ExportDialog() {
   return (
     <div
       data-testid="export-dialog"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(1, 4, 9, 0.72)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 60,
-      }}
+      className="dialog-backdrop"
       onClick={() => !busy && closeExport()}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 520,
-          maxWidth: 'calc(100vw - 48px)',
-          background: '#0d1117',
-          border: '1px solid #30363d',
-          borderRadius: 10,
-          padding: 20,
-          boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
-        }}
-      >
-        <h2 style={{ fontSize: 15, margin: '0 0 4px', color: '#e6edf3' }}>导出</h2>
-        <p style={{ fontSize: 12, color: '#7d8590', margin: '0 0 14px' }}>{projectName}</p>
+      <div className="dialog dialog--wide" onClick={(e) => e.stopPropagation()}>
+        <h2 className="dialog__title">导出</h2>
+        <p className="dialog__sub">{projectName}</p>
 
         {/* 范围 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label style={labelStyle}>范围</label>
+        <div className="field">
+          <label className="field__label">范围</label>
           <select
             data-testid="export-scope"
+            className="select"
             value={scope}
             onChange={(e) => setScope(e.target.value as ExportScope)}
-            style={{ ...fieldStyle, flex: 1 }}
+            style={{ flex: 1 }}
           >
             <option value="tree">完整发散树（全部节点）</option>
             <option value="path">收敛路径（根 → 选中节点）</option>
           </select>
         </div>
-        <p style={{ ...labelStyle, margin: '6px 0 0' }} data-testid="export-selection-hint">
+        <p
+          className="field__hint"
+          data-testid="export-selection-hint"
+          style={{ margin: '6px 0 0', whiteSpace: 'normal' }}
+        >
           {scope === 'path'
             ? hasSelection
               ? `将导出到「${selectedLabel ?? '选中节点'}」为止的链路`
@@ -153,13 +131,14 @@ export function ExportDialog() {
         </p>
 
         {/* 格式 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-          <label style={labelStyle}>格式</label>
+        <div className="field">
+          <label className="field__label">格式</label>
           <select
             data-testid="export-format"
+            className="select"
             value={format}
             onChange={(e) => setFormat(e.target.value as ExportFormat)}
-            style={{ ...fieldStyle, flex: 1 }}
+            style={{ flex: 1 }}
           >
             <option value="markdown">Markdown（.md）</option>
             <option value="html">单文件 HTML（.html，内联样式）</option>
@@ -167,23 +146,15 @@ export function ExportDialog() {
         </div>
 
         {/* 概览 */}
-        <div
-          data-testid="export-summary"
-          style={{
-            marginTop: 14,
-            padding: '10px 12px',
-            background: '#161b22',
-            border: '1px solid #21262d',
-            borderRadius: 8,
-            fontSize: 12,
-            color: '#8b949e',
-          }}
-        >
+        <div data-testid="export-summary" className="dialog__note">
           <div>
-            将导出 <strong data-testid="export-node-count" style={{ color: '#e6edf3' }}>{doc?.nodes.length ?? 0}</strong> 个节点 ·
-            约 {contentSize} 字符
+            将导出{' '}
+            <strong data-testid="export-node-count" style={{ color: 'var(--text-1)' }}>
+              {doc?.nodes.length ?? 0}
+            </strong>{' '}
+            个节点 · 约 {contentSize} 字符
           </div>
-          <div data-testid="export-preview-list" style={{ marginTop: 6, lineHeight: 1.6 }}>
+          <div data-testid="export-preview-list" style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>
             {(doc?.nodes ?? [])
               .slice(0, 6)
               .map((n) => `${'·'.repeat(n.depth + 1)} ${n.label}`)
@@ -195,48 +166,22 @@ export function ExportDialog() {
         {result && (
           <p
             data-testid="export-result"
-            style={{
-              color: result.ok ? '#3fb950' : '#f85149',
-              fontSize: 12,
-              margin: '12px 0 0',
-              wordBreak: 'break-all',
-            }}
+            className="dialog__error"
+            style={{ color: result.ok ? 'var(--ok)' : 'var(--danger)', wordBreak: 'break-all' }}
           >
             {result.text}
           </p>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
-          <button
-            data-testid="export-close"
-            onClick={() => closeExport()}
-            disabled={busy}
-            style={{
-              background: 'transparent',
-              color: '#c9d1d9',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              padding: '7px 14px',
-              fontSize: 13,
-              cursor: busy ? 'not-allowed' : 'pointer',
-            }}
-          >
+        <div className="dialog__actions">
+          <button data-testid="export-close" className="btn" onClick={() => closeExport()} disabled={busy}>
             关闭
           </button>
           <button
             data-testid="export-submit"
+            className="btn btn--primary"
             onClick={doExport}
             disabled={busy || !doc || doc.nodes.length === 0}
-            style={{
-              background: busy || !doc ? '#1f6feb88' : '#1f6feb',
-              color: '#fff',
-              border: '1px solid #1f6feb',
-              borderRadius: 6,
-              padding: '7px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: busy ? 'wait' : 'pointer',
-            }}
           >
             {busy ? '导出中…' : '选择位置并导出'}
           </button>

@@ -1,6 +1,82 @@
+/* ============================================================================
+   风衍 IdeaSprout —— 界面样式
+   设计参照：Apple 的 Fluid Interfaces / Materials / Typography（WWDC 演讲提炼）
+
+   三条落地原则（改样式时别违背）：
+     1) 画布是深色舞台、卡片是浅色纸 —— 舞台不动，**chrome 用半透明"材质"浮在内容上**，
+        而不是切掉一条实色横带。
+     2) 材质分重量：大面（抽屉 / 弹窗 / 面板）用重材质，小控件（按钮 / chip）用轻材质。
+        绝不把浅材质叠在浅材质上（可读性会塌）。
+     3) 能被"上手抓"的东西（抽屉、气泡、按钮）只用 transform / opacity 做动效，
+        曲线走"起步快、收尾极缓"，并且在 prefers-reduced-motion 下退化成交叉淡入。
+
+   ⚠️ 探针对样式有硬断言，动这几处前先看 probe-*.cjs：
+     · 卡片默认底色必须是纯白 rgb(255,255,255) —— 颜色来自 shared/colors.ts，别在 CSS 里改
+     · 控件面板 / 缩略图的 box-shadow 必须保留 `0 0 0 1px` 描边（probe-controls）
+     · 缩略图底色不能是白色、遮罩不能是 rgb(240,240,240)（probe-controls）
+     · 控件按钮 ≥28px、图标 ≥14px；前三个有分隔线、最后一个没有（probe-controls）
+     · 卡片文字宽度有预算（260px 卡宽 / 11.5px 字号下 20 字排 1 行）——
+       **不要给 body 或卡片加 letter-spacing**，会撑破换行、挤爆卡片高度契约
+   ============================================================================ */
+
 :root {
   color-scheme: dark;
+
+  /* ---------- 表面（沿用原有深色家族，只做细化，避免与组件内联样式打架） ---------- */
+  --bg-base: #0d1117; /* 窗口 / 画布底 */
+  --bg-raised: #161b22; /* 抬升面：面板、tab、气泡 */
+  --bg-sunken: #010409; /* 内嵌输入 */
+  --bg-hover: #1f242c;
+  --bg-active: #262c36;
+
+  /* ---------- 材质：半透明 + 背景模糊（Apple 的"功能性浮层"在 Web 上的近似） ---------- */
+  --material-chrome: rgba(13, 17, 23, 0.72);
+  --material-panel: rgba(22, 27, 34, 0.78);
+  --material-strong: rgba(22, 27, 34, 0.94);
+  --blur-chrome: saturate(180%) blur(24px);
+  --blur-panel: saturate(170%) blur(30px);
+
+  /* ---------- 分隔：用低透明白色的发丝线，比实心灰线"轻" ---------- */
+  --hairline: rgba(240, 246, 252, 0.09);
+  --hairline-strong: rgba(240, 246, 252, 0.16);
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06); /* 顶边反光：材质被光照到 */
+
+  /* ---------- 文字 ---------- */
+  --text-1: #e6edf3;
+  --text-2: #c9d1d9;
+  --text-3: #8b949e;
+  --text-4: #6e7681;
+  --accent: #1f6feb;
+  --accent-hover: #388bfd;
+  --accent-soft: rgba(31, 111, 235, 0.16);
+  --accent-ring: rgba(31, 111, 235, 0.38);
+  --ok: #3fb950;
+  --warn: #d29922;
+  --danger: #f85149;
+
+  /* ---------- 圆角：越大越"连续"（Apple 的连续曲率用更大半径近似） ---------- */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 11px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+
+  /* ---------- 阴影：近处接触阴影 + 远处扩散，两层叠，比单层大黑块薄 ---------- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.22);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.32), 0 12px 32px rgba(0, 0, 0, 0.36);
+  --shadow-3: 0 4px 12px rgba(0, 0, 0, 0.38), 0 24px 60px rgba(0, 0, 0, 0.48);
+
+  /* ---------- 动效：先给"手感对"的曲线（真弹簧要 JS，这里用阻尼曲线近似） ---------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* 快出慢收，默认 */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* 对称曲线：可逆动效镜像用 */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* 抽屉/面板：起步快、收尾极缓 */
+  --dur-press: 90ms;
+  --dur-fast: 140ms;
+  --dur: 240ms;
+  --dur-slow: 380ms;
 }
+
+/* ============================== 基础排版 ============================== */
 
 html,
 body,
@@ -10,168 +86,662 @@ body,
 }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: #0d1117;
-  color: #e6edf3;
+  /* 默认走平台系统字体（它自带光学尺寸与字距调优）；macOS → SF，Windows → Segoe UI。
+     不要给 body 加 letter-spacing：卡片文字宽度有预算，会被撑破换行。 */
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  font-optical-sizing: auto;
+  background: var(--bg-base);
+  color: var(--text-1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(31, 111, 235, 0.42);
+  color: #fff;
+}
+
+/* 键盘可达性：只有键盘操作才显示聚焦环（鼠标点击不显示，避免视觉噪音） */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+/* 细滚动条：轨道透明、拇指半透明 —— 默认那条灰色方槽在深色界面上太"系统" */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(240, 246, 252, 0.16);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(240, 246, 252, 0.3);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* React Flow 默认节点是白底，而其节点文字色默认 inherit，
    会继承到 body 的浅色 → 白底浅字、对比度过低。
    用更高特异性直接把节点文字设为深色（覆盖 xyflow 自带的 node 规则）。 */
 .react-flow .react-flow__node {
-  color: #0d1117;
+  color: var(--bg-base);
 }
 
-/* D.6 画布缩放控件（放大 / 缩小 / fitView / 锁定）在深色主题下的可读性。
-   xyflow 默认按钮底色是近白的 #fefefe，而图标是 fill:currentColor + color:inherit，
-   于是继承了 body 的浅色 #e6edf3 —— 浅图标压浅底，实测对比度只有 ~1.1:1，
-   四个按钮肉眼几乎"隐形"（WCAG 非文本内容要求 ≥3:1）。
-   修法：覆盖 xyflow 的**非 default 变量名** --xy-controls-button-*。
-   它内部写的是 var(该名, var(同名-default))，所以填了非 default 名就一定生效，
-   与 CSS 加载顺序无关（styles.css 先于 App 引入的 xyflow style.css），也不必用 !important。 */
-.react-flow {
-  --xy-controls-button-background-color: #161b22;
-  --xy-controls-button-background-color-hover: #1f6feb;
-  --xy-controls-button-color: #e6edf3;
-  --xy-controls-button-color-hover: #ffffff;
-  --xy-controls-button-border-color: #30363d;
-  /* 1px 描边 + 投影，让控件从画布底色上"浮"出来（默认投影在黑底上等于看不见） */
-  --xy-controls-box-shadow: 0 0 0 1px #30363d, 0 6px 18px rgba(0, 0, 0, 0.55);
+/* ============================== 应用外壳 ============================== */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-/* 尺寸是 xyflow 里写死的（26px / 图标 12px），变量管不到，用更高特异性覆盖：
-   .react-flow + .react-flow__controls-button = (0,2,0)，赢过自带规则的 (0,1,0)。 */
-.react-flow .react-flow__controls {
-  border-radius: 6px;
-  overflow: hidden;
-}
-.react-flow .react-flow__controls-button {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
-.react-flow .react-flow__controls-button svg {
-  max-width: 15px;
-  max-height: 15px;
-}
-/* 禁用态（例如已到最大缩放）默认 fill-opacity .4，在深底上偏糊，抬到 .55 仍可辨 */
-.react-flow .react-flow__controls-button:disabled svg {
-  fill-opacity: 0.55;
-}
-.react-flow .react-flow__controls-button:last-child {
-  border-bottom: none;
+/* 顶栏 = 半透明 chrome：内容在它下面流动，层次由"材质"交代，不靠一条实线切开。
+   底边用发丝线 + 一层扩散投影代替原来的 1px 实色 border-bottom。 */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 30;
+  background: var(--material-chrome);
+  -webkit-backdrop-filter: var(--blur-chrome);
+  backdrop-filter: var(--blur-chrome);
+  box-shadow: var(--edge-highlight), 0 1px 0 var(--hairline), 0 8px 24px rgba(1, 4, 9, 0.3);
 }
 
-/* 缩略图（快速定位）同样是"默认浅色主题"：底色 #fff + 遮罩 rgba(240,240,240,.6)，
-   在白底应用里没问题，压在我们 #0d1117 的画布上就是一块刺眼的白板。
-   注意用 box-shadow 画描边、不用 border —— 围边会影响元素尺寸，而缩略图的点击定位
-   是按 svg 的 getBoundingClientRect 比例换算的，不引入任何布局位移最安全。 */
-.react-flow {
-  --xy-minimap-background-color: #161b22;
-  --xy-minimap-mask-background-color: rgba(1, 4, 9, 0.55);
-  --xy-minimap-mask-stroke-color: #8b949e;
-}
-.react-flow .react-flow__minimap {
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: 0 0 0 1px #30363d, 0 6px 18px rgba(0, 0, 0, 0.45);
+.app-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  /* 标题用负字距（字大了自然会显得松），这是 Apple 的 size-specific tracking */
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+  user-select: none;
 }
 
-/* C.4 Markdown 预览排版（react-markdown 输出裸元素，需补基础样式） */
-.md-body {
-  font-size: 13px;
-  line-height: 1.75;
-  color: #c9d1d9;
-  word-break: break-word;
+.app-hint {
+  font-size: 11.5px;
+  color: var(--ok);
+  font-variant-numeric: tabular-nums; /* 时间戳不跳动 */
+  white-space: nowrap;
 }
-.md-body > :first-child {
-  margin-top: 0;
+
+.app-spacer {
+  flex: 1;
 }
-.md-body h1,
-.md-body h2,
-.md-body h3 {
-  color: #e6edf3;
-  line-height: 1.35;
-  margin: 16px 0 8px;
-}
-.md-body h1 {
-  font-size: 17px;
-  border-bottom: 1px solid #21262d;
-  padding-bottom: 6px;
-}
-.md-body h2 {
-  font-size: 15px;
-}
-.md-body h3 {
-  font-size: 14px;
-}
-.md-body p {
-  margin: 0 0 10px;
-}
-.md-body ul,
-.md-body ol {
-  margin: 0 0 10px;
-  padding-left: 20px;
-}
-.md-body li {
-  margin: 2px 0;
-}
-.md-body a {
-  color: #58a6ff;
-}
-.md-body code {
-  background: #161b22;
-  border: 1px solid #21262d;
-  border-radius: 4px;
-  padding: 1px 5px;
+
+/* 状态条（错误 / 警告）：给足颜色与图标位，但保持"薄"，不抢画面 */
+.app-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
   font-size: 12px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  -webkit-backdrop-filter: var(--blur-chrome);
+  backdrop-filter: var(--blur-chrome);
 }
-.md-body pre {
-  background: #010409;
-  border: 1px solid #21262d;
-  border-radius: 6px;
-  padding: 10px;
-  overflow-x: auto;
+.app-banner__close {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.7;
 }
-.md-body pre code {
-  background: none;
-  border: none;
+.app-banner--error {
+  background: rgba(248, 81, 73, 0.14);
+  color: #ff9d97;
+  box-shadow: inset 0 -1px 0 rgba(248, 81, 73, 0.28);
+}
+.app-banner--warn {
+  background: rgba(210, 153, 34, 0.14);
+  color: #f2cc7b;
+  box-shadow: inset 0 -1px 0 rgba(210, 153, 34, 0.28);
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ============================== 按钮 ============================== */
+
+/* 轻材质：比"透明 + 描边"更像实体控件（Apple 按钮是有一点点厚度的）。
+   按下即反馈（:active 立刻缩放），不等 click —— 延迟感会让界面"发死"。 */
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+.btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--hairline-strong);
+  color: var(--text-1);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.btn--primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: #fff;
+}
+/* 开关态（例如"评论"按钮已激活）：用强调色实心表示"现在处于这个模式" */
+.btn--on {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+.btn--danger {
+  color: var(--danger);
+}
+.btn--danger:hover:not(:disabled) {
+  background: rgba(248, 81, 73, 0.14);
+  border-color: rgba(248, 81, 73, 0.5);
+  color: #ff9d97;
+}
+
+/* ============================== 表单控件 ============================== */
+/* 统一内嵌感：输入区比容器"低一层"（更暗），聚焦时用强调色 + 外发光而不是粗描边 */
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.field__label {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.input,
+.select,
+.textarea {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text-1);
+  background: var(--bg-sunken);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 7px 9px;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--hairline-strong);
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+.select {
+  cursor: pointer;
+}
+
+/* ============================== 弹窗（模态） ============================== */
+/* 模态 = 材质 + 遮罩：既压暗背景（聚焦），又让面板"到场"而不是凭空出现。
+   ⚠️ 进场同时动 opacity 与 transform，材质才有"被带上来"的实感（纯淡入像翻幻灯片）。 */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(1, 4, 9, 0.66);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+  animation: is-fade-in var(--dur) var(--ease-out);
+}
+.dialog {
+  width: 460px;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--material-strong);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-xl);
+  padding: 20px;
+  box-shadow: var(--shadow-3), var(--edge-highlight);
+  animation: is-materialize var(--dur-slow) var(--ease-drawer);
+  transform-origin: center;
+}
+.dialog--wide {
+  width: 560px;
+}
+.dialog__title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--text-1);
+}
+.dialog__sub {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.dialog__error {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+@keyframes is-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* 材质"凝结"：位移 + 缩放 + 淡入三件事一起做 */
+@keyframes is-materialize {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============================== 画布 tab 条 ============================== */
+
+.project-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0 10px;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 20;
+  background: var(--material-chrome);
+  -webkit-backdrop-filter: var(--blur-chrome);
+  backdrop-filter: var(--blur-chrome);
+  box-shadow: var(--edge-highlight), 0 1px 0 var(--hairline);
+  -webkit-app-region: no-drag;
+}
+/* 历史画布（tab 条最左边）：低存在感的图标按钮，不参与 tab 的视觉序列 */
+.project-tab-history {
+  flex: none;
+  align-self: center;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+.project-tab-history:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--hairline-strong);
+  color: var(--text-1);
+}
+.project-tab-history:active {
+  transform: scale(0.97);
+}
+.project-tab-history__count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.project-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 6px 12px;
+  margin-top: 7px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-3);
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), transform var(--dur-press) var(--ease-out);
+}
+.project-tab:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text-1);
+}
+.project-tab:active {
+  transform: translateY(1px);
+}
+/* 当前 tab：与下方画布连成一体（底色改成画布色），顶部一条强调色的"选择指示" */
+.project-tab--active {
+  background: var(--bg-base);
+  color: var(--text-1);
+  border-color: var(--hairline);
+  box-shadow: inset 0 2px 0 var(--accent), 0 -6px 18px rgba(1, 4, 9, 0.25);
+  cursor: default;
+}
+.project-tab--active:active {
+  transform: none;
+}
+.project-tab__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 当前 tab 里的画布名：透明边框，hover / 聚焦才显形（不聚焦时像纯文本） */
+.project-tab__name-input {
+  width: 150px;
+  background: transparent;
+  color: var(--text-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  padding: 2px 5px;
+  font-size: 12.5px;
+  font-family: inherit;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.project-tab__name-input:hover {
+  border-color: var(--hairline-strong);
+}
+.project-tab__name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-base);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.project-tab__count {
+  flex: none;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.project-tab--active .project-tab__count {
+  background: var(--accent);
+  color: #fff;
+}
+/* 关闭 tab 的 ×：常态淡出，hover / 当前 tab 才显形（避免误点） */
+.project-tab__close {
+  flex: none;
+  width: 16px;
+  height: 16px;
   padding: 0;
-}
-.md-body blockquote {
-  margin: 0 0 10px;
-  padding: 6px 10px;
-  border-left: 3px solid #30363d;
-  background: #161b22;
-  color: #8b949e;
-}
-.md-body hr {
   border: none;
-  border-top: 1px solid #21262d;
-  margin: 14px 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-4);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
-.md-body table {
-  border-collapse: collapse;
+.project-tab:hover .project-tab__close,
+.project-tab--active .project-tab__close {
+  opacity: 1;
+}
+.project-tab__close:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-1);
+}
+
+.project-tab-new {
+  flex: none;
+  align-self: center;
+  margin-left: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+.project-tab-new:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--hairline-strong);
+  color: var(--text-1);
+}
+.project-tab-new:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.project-tab-new:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ============================== 历史画布抽屉 ============================== */
+/* 重材质（侧栏等级）：比画布亮一档 + 更强模糊，明确"这是一层浮起来的结构"。
+   ⚠️ 用 transform 进出，不动 left/width —— 只跑合成器，且随时可被打断。 */
+
+.history-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(1, 4, 9, 0.45);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: is-fade-in var(--dur) var(--ease-out);
+}
+.history-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 21;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: var(--material-strong);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  border-right: 1px solid var(--hairline);
+  box-shadow: 12px 0 40px rgba(1, 4, 9, 0.55), var(--edge-highlight);
+  transform: translateX(-100%);
+  transition: transform var(--dur-slow) var(--ease-drawer), visibility var(--dur-slow);
+  visibility: hidden;
+  will-change: transform;
+}
+.history-drawer--open {
+  transform: none;
+  visibility: visible;
+}
+.history-drawer__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--hairline);
+  flex: none;
+}
+.history-drawer__title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+.history-drawer__close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-4);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.history-drawer__close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-1);
+}
+.history-drawer__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+}
+.history-drawer__empty {
+  padding: 12px 8px;
+  color: var(--text-4);
+  font-size: 12px;
+  text-align: center;
+}
+.history-item {
+  display: block;
   width: 100%;
-  margin: 0 0 10px;
-}
-.md-body th,
-.md-body td {
-  border: 1px solid #21262d;
-  padding: 5px 8px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-1);
+  font-size: 12.5px;
   text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), transform var(--dur-press) var(--ease-out);
+}
+.history-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--hairline);
+}
+.history-item:active:not(:disabled) {
+  transform: scale(0.99);
+}
+.history-item--current {
+  background: var(--accent-soft);
+  border-color: rgba(31, 111, 235, 0.5);
+}
+.history-item:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.history-item__name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-item__tag {
+  display: inline-block;
+  margin-top: 4px;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-2);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+.history-item__tag--current {
+  background: var(--accent);
+  color: #fff;
+}
+.history-item__meta {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--text-4);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ---------------- 评论（气泡）：节点角标 + 画布自由气泡 + 弹层 ---------------- */
+/* ============================== 节点卡片附加件 ============================== */
+/* ⚠️ 这些角标长在**白底卡片**上，配色必须继续走浅色系（深色角标会糊在白纸上）。
+   改的只是圆角 / 阴影 / 按压反馈。 */
 
-/* 放置评论模式：画布光标变十字，提示"点这里放气泡" */
-.canvas-placing .react-flow__pane {
-  cursor: crosshair;
-}
-
-/* idea 节点卡片右上角的评论角标（卡片是白底深字，角标随之用浅色描边） */
 .comment-badge {
   position: absolute;
   top: -10px;
@@ -185,12 +755,19 @@ body {
   line-height: 1;
   padding: 3px 7px;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 3px 8px rgba(0, 0, 0, 0.14);
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+  font-variant-numeric: tabular-nums;
 }
 .comment-badge:hover {
-  background: #1f6feb;
-  border-color: #1f6feb;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
+}
+.comment-badge:active {
+  transform: scale(0.94);
 }
 
 /* 收展开关：钉在卡片右缘中间 —— 子节点就长在右边，开关正好落在父子之间。
@@ -212,281 +789,19 @@ body {
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 3px 8px rgba(0, 0, 0, 0.14);
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 .collapse-toggle:hover {
-  background: #1f6feb;
-  border-color: #1f6feb;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
-
-/* 画布 tab 条（顶栏下方）：一张画布一个 tab，末尾「＋ 新建画布」 */
-.project-tabs {
-  -webkit-app-region: no-drag;
-}
-.project-tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 220px;
-  padding: 6px 12px;
-  margin-top: 6px;
-  border: 1px solid #21262d;
-  border-bottom: none;
-  border-radius: 7px 7px 0 0;
-  background: #161b22;
-  color: #8b949e;
-  font-size: 12.5px;
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-}
-.project-tab:hover {
-  color: #e6edf3;
-  background: #1f242c;
-}
-.project-tab--active {
-  background: #0d1117;
-  color: #e6edf3;
-  border-color: #30363d;
-  /* 当前 tab 与下方画布连成一体：用一条底色顶掉分隔线 */
-  box-shadow: inset 0 2px 0 #1f6feb;
-  cursor: default;
-}
-.project-tab__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 当前 tab 里的画布名：透明边框，聚焦时才显形（与原来顶栏的输入框手感一致） */
-.project-tab__name-input {
-  width: 150px;
-  background: transparent;
-  color: #e6edf3;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  padding: 2px 5px;
-  font-size: 12.5px;
-  font-family: inherit;
-}
-.project-tab__name-input:hover {
-  border-color: #30363d;
-}
-.project-tab__name-input:focus {
-  outline: none;
-  border-color: #1f6feb;
-  background: #0d1117;
-}
-.project-tab__count {
-  flex: none;
-  min-width: 16px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: #21262d;
-  color: #8b949e;
-  font-size: 10.5px;
-  line-height: 15px;
-  text-align: center;
-}
-.project-tab--active .project-tab__count {
-  background: #1f6feb;
-  color: #fff;
-}
-/* 关闭 tab 的 ×：常态淡出，hover / 当前 tab 才显形（避免误点） */
-.project-tab__close {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: #6e7681;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-}
-.project-tab:hover .project-tab__close,
-.project-tab--active .project-tab__close {
-  opacity: 1;
-}
-.project-tab__close:hover:not(:disabled) {
-  background: #30363d;
-  color: #e6edf3;
-}
-/* 「历史画布」按钮：tab 条最左边，点开左侧抽屉 */
-.project-tab-history {
-  flex: none;
-  align-self: center;
-  margin-right: 6px;
-  padding: 4px 10px;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  background: transparent;
-  color: #c9d1d9;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.project-tab-history:hover {
-  border-color: #1f6feb;
-  color: #e6edf3;
-}
-.project-tab-history__count {
-  min-width: 16px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: #21262d;
-  color: #8b949e;
-  font-size: 10.5px;
-  line-height: 16px;
-  text-align: center;
-}
-
-/* 历史画布抽屉：覆盖在画布左侧，滑出/收起 */
-.history-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  background: rgba(1, 4, 9, 0.45);
-}
-.history-drawer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 21;
-  width: 300px;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid #30363d;
-  background: #0d1117;
-  box-shadow: 8px 0 24px rgba(1, 4, 9, 0.5);
-  transform: translateX(-100%);
-  transition: transform 0.18s ease;
-  visibility: hidden;
-}
-.history-drawer--open {
-  transform: none;
-  visibility: visible;
-}
-.history-drawer__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #21262d;
-  flex: none;
-}
-.history-drawer__title {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 600;
-  color: #e6edf3;
-}
-.history-drawer__close {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: #6e7681;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-.history-drawer__close:hover {
-  background: #30363d;
-  color: #e6edf3;
-}
-.history-drawer__list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 6px;
-}
-.history-drawer__empty {
-  padding: 12px 8px;
-  color: #6e7681;
-  font-size: 12px;
-  text-align: center;
-}
-.history-item {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: #e6edf3;
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-}
-.history-item:hover:not(:disabled) {
-  background: #161b22;
-  border-color: #30363d;
-}
-.history-item--current {
-  background: #161b22;
-  border-color: #1f6feb;
-}
-.history-item:disabled {
-  opacity: 0.55;
-  cursor: wait;
-}
-.history-item__name {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.history-item__tag {
-  display: inline-block;
-  margin-top: 4px;
-  margin-right: 6px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #21262d;
-  color: #8b949e;
-  font-size: 10.5px;
-  line-height: 16px;
-}
-.history-item__tag--current {
-  background: #1f6feb;
-  color: #fff;
-}
-.history-item__meta {
-  display: inline-block;
-  margin-top: 4px;
-  color: #6e7681;
-  font-size: 10.5px;
-}
-
-.project-tab-new {
-  flex: none;
-  align-self: center;
-  margin-left: 4px;
-  padding: 4px 10px;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  background: transparent;
-  color: #c9d1d9;
-  font-size: 12px;
-  cursor: pointer;
-}
-.project-tab-new:hover:not(:disabled) {
-  border-color: #1f6feb;
-  color: #e6edf3;
-}
-.project-tab-new:disabled {
-  opacity: 0.55;
-  cursor: wait;
+/* 注意：位移反馈要带上原有的 translateY(-50%)，否则会跳位 */
+.collapse-toggle:active {
+  transform: translateY(-50%) scale(0.94);
 }
 
 /* 方案节点：标题前的一枚「方案」chip（内联，不与标题文字重叠） */
@@ -498,7 +813,7 @@ body {
   font-weight: 600;
   line-height: 1;
   padding: 2px 5px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   color: #fff;
   background: #8957e5;
 }
@@ -514,13 +829,13 @@ body {
   gap: 4px;
   padding: 3px 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid #d0d7de;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16), 0 6px 16px rgba(0, 0, 0, 0.18);
   /* 默认隐藏：卡片上已经有两个角标（评论/收展），常态再挂一排色点太吵 */
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.12s;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 .react-flow__node:hover .card-swatches,
 .card-swatches:hover {
@@ -534,16 +849,22 @@ body {
   border-radius: 999px;
   border: 1px solid #d0d7de;
   cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 .card-swatch:hover {
   transform: scale(1.18);
 }
+.card-swatch:active {
+  transform: scale(0.95);
+}
 /* 当前生效的颜色：加一圈深色描边，一眼看出"这张卡现在是这个色" */
 .card-swatch--on {
-  box-shadow: 0 0 0 2px #1f6feb;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
-/* 想法回收站：画布底部居中的固定覆盖层（不随画布平移/缩放） */
+/* ============================== 想法回收站 ============================== */
+/* 浮在画布底部的胶囊：轻材质 + 投影说明它"悬"着（不随画布平移缩放） */
+
 .trash-bin {
   position: absolute;
   left: 50%;
@@ -560,23 +881,27 @@ body {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 6px 13px;
+  padding: 7px 14px;
   border-radius: 999px;
-  border: 1px solid #30363d;
-  background: #161b22;
-  color: #e6edf3;
+  border: 1px solid var(--hairline-strong);
+  background: var(--material-panel);
+  -webkit-backdrop-filter: var(--blur-chrome);
+  backdrop-filter: var(--blur-chrome);
+  color: var(--text-1);
   font-size: 12px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-  transition: border-color 0.12s, background 0.12s, transform 0.12s;
+  box-shadow: var(--shadow-2), var(--edge-highlight);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out), transform var(--dur) var(--ease-drawer);
 }
 .trash-bin__bar:hover {
-  border-color: #8b949e;
+  border-color: var(--hairline-strong);
+  background: var(--material-strong);
 }
-/* 拖拽悬停：整块放大 + 变红，明确"松手就归档" */
+/* 拖拽悬停：整块放大 + 变红，明确"松手就归档"（有动量驱动的交互，可以带一点弹性） */
 .trash-bin--hot .trash-bin__bar {
-  border-color: #f85149;
-  background: #2d1416;
+  border-color: var(--danger);
+  background: rgba(45, 20, 22, 0.9);
   transform: scale(1.08);
 }
 .trash-bin__icon {
@@ -586,18 +911,19 @@ body {
   min-width: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #30363d;
-  color: #e6edf3;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-1);
   font-size: 11px;
   font-weight: 600;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .trash-bin--hot .trash-bin__count {
-  background: #f85149;
+  background: var(--danger);
   color: #fff;
 }
 .trash-bin__caret {
-  color: #8b949e;
+  color: var(--text-3);
   font-size: 10px;
 }
 .trash-bin__panel {
@@ -605,14 +931,16 @@ body {
   max-height: 190px;
   overflow-y: auto;
   padding: 7px;
-  border-radius: 8px;
-  border: 1px solid #30363d;
-  background: #161b22;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--hairline-strong);
+  background: var(--material-strong);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-3), var(--edge-highlight);
 }
 .trash-bin__empty {
   padding: 8px 6px;
-  color: #8b949e;
+  color: var(--text-3);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -626,14 +954,14 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 5px 4px 5px 6px;
-  border-radius: 6px;
+  padding: 6px;
+  border-radius: var(--r-sm);
 }
 .trash-bin__item + .trash-bin__item {
-  border-top: 1px solid #21262d;
+  border-top: 1px solid var(--hairline);
 }
 .trash-bin__item:hover {
-  background: #1f242c;
+  background: rgba(255, 255, 255, 0.06);
 }
 .trash-bin__label {
   flex: 1;
@@ -641,46 +969,57 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #e6edf3;
+  color: var(--text-1);
   font-size: 12px;
 }
 .trash-bin__restore {
   flex: none;
-  padding: 3px 9px;
-  border-radius: 6px;
-  border: 1px solid #30363d;
-  background: #21262d;
-  color: #e6edf3;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-1);
   font-size: 11px;
   cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 .trash-bin__restore:hover {
-  border-color: #1f6feb;
-  background: #1f6feb;
+  border-color: transparent;
+  background: var(--accent);
   color: #fff;
 }
+.trash-bin__restore:active {
+  transform: scale(0.96);
+}
 
-/* 画布自由气泡（type 'comment' 的节点本体） */
+/* ============================== 画布自由气泡 ============================== */
+
 .comment-bubble {
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
   border-radius: 999px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-  color: #e6edf3;
+  background: var(--material-panel);
+  -webkit-backdrop-filter: var(--blur-chrome);
+  backdrop-filter: var(--blur-chrome);
+  border: 1px solid var(--hairline-strong);
+  box-shadow: var(--shadow-1), var(--edge-highlight);
+  color: var(--text-1);
   font-size: 12px;
   cursor: pointer;
   user-select: none;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 .comment-bubble:hover {
-  border-color: #1f6feb;
+  border-color: var(--accent);
 }
 .comment-bubble.active {
-  border-color: #1f6feb;
-  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.35);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring), var(--shadow-2);
 }
 /* 气泡上显示正文前几个字（没有回复线程，也就没有"条数"可显示） */
 .comment-bubble-preview {
@@ -688,19 +1027,22 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #c9d1d9;
+  color: var(--text-2);
 }
 
-/* 评论弹层（NodeToolbar 里渲染的面板）：深色，浮在画布上 */
+/* ============================== 评论弹层（NodeToolbar） ============================== */
+
 .comment-node-panel,
 .comment-thread {
   width: 240px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  padding: 8px;
-  color: #e6edf3;
+  background: var(--material-strong);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2), var(--edge-highlight);
+  padding: 9px;
+  color: var(--text-1);
   font-size: 12px;
 }
 .comment-node-panel {
@@ -710,33 +1052,36 @@ body {
 }
 .comment-node-panel-title {
   font-weight: 600;
-  color: #c9d1d9;
+  color: var(--text-2);
 }
 .comment-node-panel .comment-empty {
-  color: #57606a;
+  color: var(--text-4);
   font-size: 11.5px;
 }
 .comment-thread {
-  border: 1px solid #21262d;
-  background: #0d1117;
+  border-color: var(--hairline);
+  background: rgba(13, 17, 23, 0.92);
 }
 
 .comment-input {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
-  background: #010409;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  color: #e6edf3;
+  background: var(--bg-sunken);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  color: var(--text-1);
   font-size: 12px;
   font-family: inherit;
-  padding: 5px 7px;
-  line-height: 1.4;
+  padding: 6px 8px;
+  line-height: 1.45;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 .comment-input:focus {
   outline: none;
-  border-color: #1f6feb;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .comment-row {
@@ -746,30 +1091,355 @@ body {
   margin-top: 5px;
 }
 .comment-btn {
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  background: #21262d;
-  color: #e6edf3;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-1);
   font-size: 11.5px;
-  padding: 3px 10px;
+  padding: 4px 11px;
   cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+.comment-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--hairline-strong);
+}
+.comment-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .comment-btn.primary:not(:disabled) {
-  background: #1f6feb;
-  border-color: #1f6feb;
+  background: var(--accent);
+  border-color: transparent;
   color: #fff;
+  font-weight: 600;
+}
+.comment-btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 .comment-btn.primary:disabled {
   opacity: 0.45;
   cursor: default;
 }
 .comment-btn.danger {
-  color: #f85149;
+  color: var(--danger);
 }
-.comment-btn.danger:hover {
-  background: #3d1418;
-  border-color: #f85149;
+.comment-btn.danger:hover:not(:disabled) {
+  background: rgba(248, 81, 73, 0.16);
+  border-color: rgba(248, 81, 73, 0.5);
+  color: #ff9d97;
 }
 
 /* 评论：单人使用、非协作场景 —— 没有回复线程，一条就是一条。
    早期版本有 .comment-replies / .comment-reply / .comment-x（回复列表与删除回复），已随回复机制删除。 */
+
+/* ============================== 画布控件（xyflow） ============================== */
+
+/* 画布缩放控件（放大 / 缩小 / fitView / 锁定）在深色主题下的可读性。
+   xyflow 默认按钮底色是近白的 #fefefe，而图标是 fill:currentColor + color:inherit，
+   于是继承了 body 的浅色 —— 浅图标压浅底，实测对比度只有 ~1.1:1，
+   四个按钮肉眼几乎"隐形"（WCAG 非文本内容要求 ≥3:1）。
+   修法：覆盖 xyflow 的**非 default 变量名** --xy-controls-button-*。
+   它内部写的是 var(该名, var(同名-default))，所以填了非 default 名就一定生效，
+   与 CSS 加载顺序无关（styles.css 先于 App 引入的 xyflow style.css），也不必用 !important。
+   ⚠️ box-shadow 里那段 `0 0 0 1px` 是 probe-controls 的断言依据（"面板从画布上浮出"），别删。 */
+.react-flow {
+  --xy-controls-button-background-color: var(--bg-raised);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--text-1);
+  --xy-controls-button-color-hover: #ffffff;
+  --xy-controls-button-border-color: var(--hairline);
+  --xy-controls-box-shadow: 0 0 0 1px var(--hairline-strong), 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* 尺寸是 xyflow 里写死的（26px / 图标 12px），变量管不到，用更高特异性覆盖：
+   .react-flow + .react-flow__controls-button = (0,2,0)，赢过自带规则的 (0,1,0)。
+   ⚠️ 28px / 15px 是 probe-controls 的下限断言（≥28 / ≥14），别改小。 */
+.react-flow .react-flow__controls {
+  border-radius: var(--r-md);
+  overflow: hidden;
+  -webkit-backdrop-filter: var(--blur-chrome);
+  backdrop-filter: var(--blur-chrome);
+}
+.react-flow .react-flow__controls-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.react-flow .react-flow__controls-button:hover {
+  /* 图标在实心强调色上要略放大一点，才有"被按下去"的手感 */
+  transform: none;
+}
+.react-flow .react-flow__controls-button svg {
+  max-width: 15px;
+  max-height: 15px;
+}
+.react-flow .react-flow__controls-button:active {
+  filter: brightness(0.92);
+}
+/* 禁用态（例如已到最大缩放）默认 fill-opacity .4，在深底上偏糊，抬到 .55 仍可辨 */
+.react-flow .react-flow__controls-button:disabled svg {
+  fill-opacity: 0.55;
+}
+.react-flow .react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+/* 缩略图（快速定位）同样是"默认浅色主题"：底色 #fff + 遮罩 rgba(240,240,240,.6)，
+   在白底应用里没问题，压在我们深色画布上就是一块刺眼的白板。
+   注意用 box-shadow 画描边、不用 border —— 围边会影响元素尺寸，而缩略图的点击定位
+   是按 svg 的 getBoundingClientRect 比例换算的，不引入任何布局位移最安全。
+   ⚠️ 底色不能变回白色、遮罩不能变回浅灰（probe-controls 断言）；`0 0 0 1px` 同理。 */
+.react-flow {
+  --xy-minimap-background-color: var(--bg-raised);
+  --xy-minimap-mask-background-color: rgba(1, 4, 9, 0.55);
+  --xy-minimap-mask-stroke-color: var(--text-3);
+}
+.react-flow .react-flow__minimap {
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--hairline-strong), 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* ============================== Markdown 预览排版 ============================== */
+
+.md-body {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text-2);
+  word-break: break-word;
+}
+.md-body > :first-child {
+  margin-top: 0;
+}
+/* 标题层级用「字重 + 字号 + 行距」三件套，而不是只靠字号：
+   大字号配更紧的行距与负字距（Apple 的 size-specific tracking）。 */
+.md-body h1,
+.md-body h2,
+.md-body h3 {
+  color: var(--text-1);
+  line-height: 1.32;
+  margin: 18px 0 8px;
+}
+.md-body h1 {
+  font-size: 17px;
+  letter-spacing: -0.014em;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 6px;
+}
+.md-body h2 {
+  font-size: 15px;
+  letter-spacing: -0.011em;
+}
+.md-body h3 {
+  font-size: 14px;
+  letter-spacing: -0.008em;
+}
+.md-body p {
+  margin: 0 0 10px;
+}
+.md-body ul,
+.md-body ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+.md-body li {
+  margin: 2px 0;
+}
+.md-body a {
+  color: #58a6ff;
+}
+.md-body code {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  padding: 1px 5px;
+  font-size: 12px;
+}
+.md-body pre {
+  background: var(--bg-sunken);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  padding: 11px;
+  overflow-x: auto;
+}
+.md-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+.md-body blockquote {
+  margin: 0 0 10px;
+  padding: 6px 12px;
+  border-left: 3px solid var(--hairline-strong);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  color: var(--text-3);
+}
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--hairline);
+  margin: 14px 0;
+}
+.md-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 10px;
+}
+.md-body th,
+.md-body td {
+  border: 1px solid var(--hairline);
+  padding: 5px 8px;
+  text-align: left;
+}
+.md-body th {
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+}
+
+/* ============================== 辅助类 ============================== */
+
+.panel {
+  background: var(--material-strong);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+}
+.hairline-t {
+  box-shadow: inset 0 1px 0 var(--hairline);
+}
+.hairline-b {
+  box-shadow: inset 0 -1px 0 var(--hairline);
+}
+
+/* 字段右侧的补充说明（比 label 更弱的次要文字） */
+.field__hint {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* 对话框内的说明块（导出汇总 / 预览列表）：比对话框底再"低一层"（沉入面） */
+.dialog__note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+
+/* 放置评论模式：画布光标变十字，提示"点这里放气泡" */
+.canvas-placing .react-flow__pane {
+  cursor: crosshair;
+}
+
+/* ============================================================================
+   无障碍：三个独立的系统偏好，各自降级（不是"一律关掉动效"）
+   ============================================================================ */
+
+/* 1) 减少动态：滑入/缩放的**几何**动效换成短的交叉淡入，保留"状态变了"的信息。
+      量级压缩到 1ms 会让某些环境仍触发动画事件，所以用显式规则覆盖，而不是压时长。 */
+@media (prefers-reduced-motion: reduce) {
+  .history-drawer {
+    transform: none;
+    opacity: 0;
+    transition: opacity var(--dur-fast) linear, visibility var(--dur-fast);
+  }
+  .history-drawer--open {
+    opacity: 1;
+  }
+  .dialog,
+  .history-backdrop,
+  .dialog-backdrop {
+    animation: is-fade-in var(--dur-fast) linear;
+  }
+  .dialog {
+    transform: none;
+  }
+  .btn:active:not(:disabled),
+  .project-tab:active,
+  .project-tab--active:active,
+  .project-tab-new:active:not(:disabled),
+  .comment-badge:active,
+  .card-swatch:active,
+  .card-swatch:hover,
+  .comment-btn:active:not(:disabled),
+  .trash-bin__restore:active,
+  .history-item:active:not(:disabled),
+  .project-tab-history:active {
+    transform: none;
+  }
+  /* 拖拽悬停的放大也去掉：保留变红（信息在颜色里，不在缩放里） */
+  .trash-bin--hot .trash-bin__bar {
+    transform: none;
+  }
+  .collapse-toggle:active {
+    transform: translateY(-50%);
+  }
+}
+
+/* 2) 减少透明：把材质做"实"（提高不透明度并去掉模糊）—— 半透明会让部分人看不清 */
+@media (prefers-reduced-transparency: reduce) {
+  .app-header,
+  .project-tabs,
+  .app-banner,
+  .history-drawer,
+  .history-backdrop,
+  .dialog,
+  .dialog-backdrop,
+  .trash-bin__bar,
+  .trash-bin__panel,
+  .comment-bubble,
+  .comment-node-panel,
+  .comment-thread,
+  .panel,
+  .react-flow .react-flow__controls {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .app-header,
+  .project-tabs,
+  .app-banner,
+  .history-backdrop {
+    background: var(--bg-base);
+  }
+  .history-drawer,
+  .dialog,
+  .trash-bin__bar,
+  .trash-bin__panel,
+  .comment-bubble,
+  .comment-node-panel,
+  .panel {
+    background: var(--bg-raised);
+  }
+  .comment-thread {
+    background: var(--bg-base);
+  }
+}
+
+/* 3) 提高对比：近实心底 + 明确描边，并把次要文字抬一档亮度 */
+@media (prefers-contrast: more) {
+  :root {
+    --hairline: rgba(240, 246, 252, 0.24);
+    --hairline-strong: rgba(240, 246, 252, 0.4);
+    --text-2: #e6edf3;
+    --text-3: #c9d1d9;
+    --text-4: #b1bac4;
+  }
+  .btn,
+  .project-tab-history,
+  .project-tab-new,
+  .trash-bin__bar,
+  .trash-bin__restore,
+  .comment-btn,
+  .comment-bubble,
+  .history-item,
+  .dialog {
+    border-color: var(--hairline-strong);
+  }
+}

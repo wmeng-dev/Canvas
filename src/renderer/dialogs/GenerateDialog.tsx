@@ -1,5 +1,8 @@
 // C.3 生成对话框：输入一个想法 → 调用主进程生成 → 作为新节点落入画布。
 // 纯受控组件，状态取自 treeStore（Zustand）。
+//
+// 结构照 styles.css 的 `.dialog-backdrop > .dialog` 约定写（遮罩负责压暗 + 点击关闭，
+// 面板负责材质），**不要在这里写内联外观样式**——内联会盖掉材质/动效。
 
 import { useEffect, useState } from 'react'
 import { useTreeStore } from '../store/treeStore'
@@ -46,72 +49,34 @@ export function GenerateDialog() {
   return (
     <div
       data-testid="generate-dialog"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(1, 4, 9, 0.72)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 50,
-      }}
+      className="dialog-backdrop"
       onClick={() => !generating && closeDialog()}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 460,
-          maxWidth: 'calc(100vw - 48px)',
-          background: '#0d1117',
-          border: '1px solid #30363d',
-          borderRadius: 10,
-          padding: 20,
-          boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
-        }}
-      >
-        <h2 style={{ fontSize: 15, margin: '0 0 4px', color: '#e6edf3' }}>发散新想法</h2>
-        <p style={{ fontSize: 12, color: '#7d8590', margin: '0 0 14px' }}>
+      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+        <h2 className="dialog__title">发散新想法</h2>
+        <p className="dialog__sub">
           {parentLabel ? `基于「${parentLabel}」继续发散` : '在根层新增一个想法'}
         </p>
 
         <textarea
           data-testid="prompt-input"
+          className="textarea"
           autoFocus
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="描述你想探索的方向，例如：把核心体验做减法，只保留一条主线。"
           rows={4}
-          style={{
-            width: '100%',
-            boxSizing: 'border-box',
-            resize: 'vertical',
-            background: '#010409',
-            color: '#e6edf3',
-            border: '1px solid #30363d',
-            borderRadius: 6,
-            padding: 10,
-            fontSize: 13,
-            lineHeight: 1.6,
-            fontFamily: 'inherit',
-            outline: 'none',
-          }}
+          style={{ width: '100%', boxSizing: 'border-box' }}
         />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-          <label style={{ fontSize: 12, color: '#7d8590' }}>生成器</label>
+        <div className="field">
+          <label className="field__label">生成器</label>
           <select
             data-testid="generator-select"
+            className="select"
             value={generatorId}
             onChange={(e) => setGeneratorId(e.target.value)}
-            style={{
-              flex: 1,
-              background: '#010409',
-              color: '#e6edf3',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              padding: '6px 8px',
-              fontSize: 12,
-            }}
+            style={{ flex: 1 }}
           >
             {generators.length === 0 && <option value="">（无可用生成器）</option>}
             {generators.map((g) => (
@@ -122,21 +87,14 @@ export function GenerateDialog() {
           </select>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-          <label style={{ fontSize: 12, color: '#7d8590' }}>内容类型</label>
+        <div className="field">
+          <label className="field__label">内容类型</label>
           <select
             data-testid="content-type-select"
+            className="select"
             value={contentType}
             onChange={(e) => setContentType(e.target.value as ContentType)}
-            style={{
-              flex: 1,
-              background: '#010409',
-              color: '#e6edf3',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              padding: '6px 8px',
-              fontSize: 12,
-            }}
+            style={{ flex: 1 }}
           >
             {CONTENT_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
@@ -146,21 +104,14 @@ export function GenerateDialog() {
           </select>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-          <label style={{ fontSize: 12, color: '#7d8590' }}>一次发散</label>
+        <div className="field">
+          <label className="field__label">一次发散</label>
           <select
             data-testid="count-select"
+            className="select"
             value={count}
             onChange={(e) => setCount(Number(e.target.value))}
-            style={{
-              width: 96,
-              background: '#010409',
-              color: '#e6edf3',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              padding: '6px 8px',
-              fontSize: 12,
-            }}
+            style={{ width: 96 }}
           >
             {[1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n}>
@@ -168,47 +119,24 @@ export function GenerateDialog() {
               </option>
             ))}
           </select>
-          <span style={{ fontSize: 11, color: '#7d8590' }}>
-            {count > 1 ? '多条并发，旧节点保留' : '单条生成'}
-          </span>
+          <span className="field__hint">{count > 1 ? '多条并发，旧节点保留' : '单条生成'}</span>
         </div>
 
         {error && (
-          <p data-testid="dialog-error" style={{ color: '#f85149', fontSize: 12, margin: '12px 0 0' }}>
+          <p data-testid="dialog-error" className="dialog__error">
             {error}
           </p>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
-          <button
-            onClick={() => closeDialog()}
-            disabled={generating}
-            style={{
-              background: 'transparent',
-              color: '#c9d1d9',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              padding: '7px 14px',
-              fontSize: 13,
-              cursor: generating ? 'not-allowed' : 'pointer',
-            }}
-          >
+        <div className="dialog__actions">
+          <button className="btn" onClick={() => closeDialog()} disabled={generating}>
             取消
           </button>
           <button
             data-testid="submit-generate"
+            className="btn btn--primary"
             onClick={() => generate(prompt, generatorId || undefined, contentType, count)}
             disabled={generating}
-            style={{
-              background: generating ? '#1f6feb88' : '#1f6feb',
-              color: '#fff',
-              border: '1px solid #1f6feb',
-              borderRadius: 6,
-              padding: '7px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: generating ? 'wait' : 'pointer',
-            }}
           >
             {generating ? '生成中…' : '生成'}
           </button>

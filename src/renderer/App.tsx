@@ -12,18 +12,6 @@ import { GenerateDialog } from './dialogs/GenerateDialog'
 import { ExportDialog } from './dialogs/ExportDialog'
 import { useTreeStore } from './store/treeStore'
 
-/** 顶栏次级按钮（描边风格，与「AI 后端 / 导出」一致） */
-const ghostBtn: React.CSSProperties = {
-  background: 'transparent',
-  color: '#c9d1d9',
-  border: '1px solid #30363d',
-  borderRadius: 6,
-  padding: '6px 12px',
-  fontSize: 13,
-  cursor: 'pointer',
-  marginRight: 8,
-}
-
 export function App() {
   const lastSavedAt = useTreeStore((s) => s.lastSavedAt)
   const init = useTreeStore((s) => s.init)
@@ -54,94 +42,41 @@ export function App() {
 
   return (
     <ReactFlowProvider>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <header
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '10px 16px',
-            borderBottom: '1px solid #21262d',
-            background: '#0d1117',
-            flex: '0 0 auto',
-          }}
-        >
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#e6edf3' }}>风衍 IdeaSprout</span>
+      {/* 外壳 / 顶栏 / 横幅 / 按钮的样式全在 styles.css（.app-shell/.app-header/.app-banner/.btn）——
+          这里**故意不写内联样式**：内联优先级高于类，写了就等于把材质化设计整块盖掉。 */}
+      <div className="app-shell">
+        <header className="app-header">
+          <span className="app-title">风衍 IdeaSprout</span>
           {savedLabel && (
-            <span data-testid="saved-hint" style={{ fontSize: 12, color: '#3fb950' }}>
+            <span data-testid="saved-hint" className="app-hint">
               {savedLabel}
             </span>
           )}
-          <div style={{ flex: 1 }} />
-          <button data-testid="open-project" onClick={() => void openProject()} style={ghostBtn}>
+          <div className="app-spacer" />
+          <button data-testid="open-project" className="btn" onClick={() => void openProject()}>
             打开
           </button>
-          <button data-testid="save-project-as" onClick={() => void saveProjectAs()} style={ghostBtn}>
+          <button data-testid="save-project-as" className="btn" onClick={() => void saveProjectAs()}>
             另存为
           </button>
-          <button data-testid="save-project" onClick={() => void saveProject()} style={ghostBtn}>
+          <button data-testid="save-project" className="btn" onClick={() => void saveProject()}>
             保存
           </button>
-          <button
-            data-testid="open-ai"
-            onClick={openAi}
-            style={{
-              background: 'transparent',
-              color: '#c9d1d9',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              padding: '6px 12px',
-              fontSize: 13,
-              cursor: 'pointer',
-              marginRight: 8,
-            }}
-          >
+          <button data-testid="open-ai" className="btn" onClick={openAi}>
             AI 后端{generators.length > 0 ? `（${generators.length}）` : ''}
           </button>
-          <button
-            data-testid="open-export"
-            onClick={openExport}
-            style={{
-              background: 'transparent',
-              color: '#c9d1d9',
-              border: '1px solid #30363d',
-              borderRadius: 6,
-              padding: '6px 12px',
-              fontSize: 13,
-              cursor: 'pointer',
-              marginRight: 8,
-            }}
-          >
+          <button data-testid="open-export" className="btn" onClick={openExport}>
             导出
           </button>
           <button
             data-testid="toggle-comment"
+            className={placingComment ? 'btn btn--on' : 'btn'}
             onClick={togglePlacingComment}
             title="在画布空白处点击，放置一条评论气泡"
-            style={{
-              ...ghostBtn,
-              marginRight: 8,
-              ...(placingComment
-                ? { background: '#1f6feb', color: '#fff', borderColor: '#1f6feb' }
-                : {}),
-            }}
           >
             {placingComment ? '点击画布放置评论…' : '💬 评论'}
           </button>
-          <button
-            data-testid="new-idea"
-            onClick={() => openDialog(null)}
-            style={{
-              background: '#1f6feb',
-              color: '#fff',
-              border: '1px solid #1f6feb',
-              borderRadius: 6,
-              padding: '6px 14px',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
+          <button data-testid="new-idea" className="btn btn--primary" onClick={() => openDialog(null)}>
             ＋ 新增想法
           </button>
         </header>
@@ -152,38 +87,26 @@ export function App() {
         {error && (
           <div
             data-testid="app-error"
+            className="app-banner app-banner--error"
             onClick={clearError}
-            style={{
-              padding: '6px 16px',
-              background: '#3d1418',
-              color: '#f85149',
-              fontSize: 12,
-              borderBottom: '1px solid #21262d',
-              cursor: 'pointer',
-            }}
           >
-            {error}（点击关闭）
+            <span>{error}</span>
+            <span className="app-banner__close">点击关闭</span>
           </div>
         )}
 
         {warning && (
           <div
             data-testid="app-warning"
+            className="app-banner app-banner--warn"
             onClick={clearWarning}
-            style={{
-              padding: '6px 16px',
-              background: '#3a2d0b',
-              color: '#d29922',
-              fontSize: 12,
-              borderBottom: '1px solid #21262d',
-              cursor: 'pointer',
-            }}
           >
-            {warning}（点击关闭）
+            <span>{warning}</span>
+            <span className="app-banner__close">点击关闭</span>
           </div>
         )}
 
-        <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+        <div className="app-body">
           {/*
             历史画布抽屉：**覆盖**在画布上（不是挤占宽度）——
             React Flow 对容器尺寸变化敏感，push 布局会白白触发一次重排/重测。
