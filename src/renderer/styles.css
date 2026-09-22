@@ -1147,7 +1147,9 @@ body {
    四个按钮肉眼几乎"隐形"（WCAG 非文本内容要求 ≥3:1）。
    修法：覆盖 xyflow 的**非 default 变量名** --xy-controls-button-*。
    它内部写的是 var(该名, var(同名-default))，所以填了非 default 名就一定生效，
-   与 CSS 加载顺序无关（styles.css 先于 App 引入的 xyflow style.css），也不必用 !important。
+   与 CSS 加载顺序无关，也不必用 !important。
+   （打包后我们的样式与 xyflow 的 style.css 会各成一个文件、先后由分包决定 ——
+   所以**这套覆盖必须继续靠"非 default 变量名 + 更高特异性"站住，不能依赖谁先谁后**。）
    ⚠️ box-shadow 里那段 `0 0 0 1px` 是 probe-controls 的断言依据（"面板从画布上浮出"），别删。 */
 .react-flow {
   --xy-controls-button-background-color: var(--bg-raised);
