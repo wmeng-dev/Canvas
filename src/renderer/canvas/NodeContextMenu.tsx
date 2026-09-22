@@ -2,12 +2,16 @@
 // D.9：「重新生成」不再是"一键直出"，而是和面板按钮一样**先进编辑态**（描述 → 输入框），
 //      编辑后可选择重新生成或只保存。两个入口共用 store 里的 editingPromptNodeId。
 // 位置用 fixed + 视口坐标，并做右/下边界收敛，避免菜单跑出窗口。
+//
+// 样式：静态外观走 .ctx-menu*（styles.css）。**left/top 与色点颜色留内联** ——
+// 前者是鼠标坐标、后者来自 shared/colors 的色板，都是数据而非样式。
 
 import { useEffect } from 'react'
 import { useTreeStore } from '../store/treeStore'
 import { CARD_COLORS } from '../../shared/colors'
 
 // ⚠️ 菜单变高（加了颜色行）时这个数要跟着改，否则靠近窗口底部时菜单会被裁掉。
+//    CSS 里 .ctx-menu 的 width 也要与 MENU_WIDTH 同步。
 const MENU_WIDTH = 216
 const MENU_HEIGHT = 178
 
@@ -45,98 +49,48 @@ export function NodeContextMenu() {
       ? '编辑描述并生成…'
       : `编辑描述并重新生成（新版本 v${versionCount + 1}）`
 
-  const itemStyle: React.CSSProperties = {
-    display: 'block',
-    width: '100%',
-    textAlign: 'left',
-    background: 'transparent',
-    color: '#e6edf3',
-    border: 'none',
-    borderRadius: 6,
-    padding: '8px 10px',
-    fontSize: 13,
-    cursor: 'pointer',
-  }
-
   return (
     <>
       {/* 点击任意位置关闭 */}
       <div
         data-testid="menu-backdrop"
+        className="ctx-menu__backdrop"
         onClick={closeMenu}
         onContextMenu={(e) => {
           e.preventDefault()
           closeMenu()
         }}
-        style={{ position: 'fixed', inset: 0, zIndex: 60 }}
       />
-      <div
-        data-testid="node-context-menu"
-        style={{
-          position: 'fixed',
-          left: x,
-          top: y,
-          width: MENU_WIDTH,
-          zIndex: 61,
-          background: '#161b22',
-          border: '1px solid #30363d',
-          borderRadius: 8,
-          padding: 6,
-          boxShadow: '0 10px 28px rgba(0,0,0,0.6)',
-        }}
-      >
-        <div
-          style={{
-            padding: '4px 10px 8px',
-            fontSize: 11,
-            color: '#7d8590',
-            borderBottom: '1px solid #21262d',
-            marginBottom: 4,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {node.data.label}
-        </div>
+      <div data-testid="node-context-menu" className="ctx-menu" style={{ left: x, top: y }}>
+        <div className="ctx-menu__header">{node.data.label}</div>
 
         <button
           data-testid="menu-ideasprout"
+          className="ctx-menu__item"
           onClick={() => {
             selectNode(node.id)
             closeMenu()
             openDialog(node.id)
           }}
-          style={itemStyle}
         >
           发散子节点…
         </button>
 
         <button
           data-testid="menu-regenerate"
+          className="ctx-menu__item"
           disabled={busy}
           onClick={() => {
             // 进编辑态（beginEditPrompt 内部会选中节点并关菜单）
             beginEditPrompt(node.id)
           }}
-          style={{ ...itemStyle, color: busy ? '#7d8590' : '#e6edf3', cursor: busy ? 'wait' : 'pointer' }}
         >
           {regenerateLabel}
         </button>
 
         {/* 卡片颜色：一排圆点，点一下即改色；最左边那颗（默认白）= 恢复默认色 */}
-        <div
-          data-testid="menu-colors"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            padding: '8px 10px 6px',
-            borderTop: '1px solid #21262d',
-            marginTop: 4,
-          }}
-        >
-          <span style={{ fontSize: 11, color: '#7d8590', marginRight: 2 }}>颜色</span>
+        <div data-testid="menu-colors" className="ctx-menu__colors">
+          <span className="ctx-menu__colors-label">颜色</span>
           {CARD_COLORS.map((c) => {
             const on = (node.data.color ?? CARD_COLORS[0].bg) === c.bg
             return (
@@ -146,20 +100,14 @@ export function NodeContextMenu() {
                 data-color-id={c.id}
                 data-color-bg={c.bg}
                 title={c.label}
+                className="ctx-menu__swatch"
                 onClick={() => {
                   closeMenu()
                   // default 那颗表示"恢复默认色"（落 null，而不是存一个白色值）
                   void setNodeColor(node.id, c.id === 'default' ? null : c.bg)
                 }}
-                style={{
-                  width: 16,
-                  height: 16,
-                  borderRadius: 999,
-                  background: c.bg,
-                  border: on ? '2px solid #1f6feb' : `1px solid ${c.border}`,
-                  padding: 0,
-                  cursor: 'pointer',
-                }}
+                // 色点底色/描边来自色板数据，必须内联
+                style={{ background: c.bg, border: on ? '2px solid var(--accent)' : `1px solid ${c.border}` }}
               />
             )
           })}

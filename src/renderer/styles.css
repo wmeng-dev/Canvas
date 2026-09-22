@@ -1029,6 +1029,11 @@ body {
   white-space: nowrap;
   color: var(--text-2);
 }
+/* 气泡里的表情图标：不参与 flex 压缩（预览文字很长时不该把图标挤没）
+   —— 这个类此前只在 JSX 里出现、CSS 里没有定义，等于挂了个空钩子。 */
+.comment-bubble-icon {
+  flex: none;
+}
 
 /* ============================== 评论弹层（NodeToolbar） ============================== */
 
@@ -1333,6 +1338,510 @@ body {
   line-height: 1.6;
 }
 
+/* ============================================================================
+   面板 / 浮层：预览侧栏、右键菜单、AI 设置、评估块
+   与 .dialog 共用同一套材质语言（material + hairline + shadow），但角色不同：
+   常驻侧栏 / 浮层 / 模态 / 内嵌块。
+   ⚠️ 只接**静态外观**；动态值（面板宽度、可行性色、节点自定义色、菜单位置）
+      必须留在内联 —— 数据驱动的样式写进 CSS 会变成"改不动"的死值。
+   ============================================================================ */
+
+/* ---------- 预览面板（常驻右侧栏） ---------- */
+.preview-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 滚动交给 __scroll，面板本身裁切 */
+  min-width: 0;
+  box-sizing: border-box;
+  border-left: 1px solid var(--hairline);
+  background: var(--material-panel);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+}
+/* 拖拽把手：贴左边缘、绝对定位（探针断言它必须是面板的直接子节点、不在滚动区内） */
+.preview-panel__resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.preview-panel__resizer.is-dragging {
+  background: var(--accent-soft);
+}
+.preview-panel__grip {
+  width: 2px;
+  height: 40px;
+  border-radius: 2px;
+  background: var(--hairline-strong);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.preview-panel__resizer.is-dragging .preview-panel__grip {
+  background: var(--accent-hover);
+}
+.preview-panel__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  box-sizing: border-box;
+}
+.preview-panel__title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+}
+.preview-panel__empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+.preview-panel__name {
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.preview-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+/* 内容类型徽标 */
+.type-tag {
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--accent-hover);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--r-xs);
+}
+/* 原始描述 / 编辑描述：左侧竖条暗示"这是引用的输入" */
+.preview-panel__prompt {
+  margin-bottom: 12px;
+  padding: 7px 10px;
+  background: var(--bg-raised);
+  border-left: 3px solid var(--hairline-strong);
+  border-radius: 0 var(--r-xs) var(--r-xs) 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-3);
+  word-break: break-word;
+}
+.preview-panel__prompt.is-editing {
+  border-left-color: var(--accent);
+}
+.preview-panel__prompt-label {
+  color: var(--text-4);
+}
+.preview-panel__editor {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  min-height: 68px;
+  font-family: inherit;
+}
+.preview-panel__edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.preview-panel__history {
+  margin-top: 20px;
+}
+.preview-panel__history-title {
+  margin: 0 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+}
+.version-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.version-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  font-size: 12px;
+  color: var(--text-2);
+}
+/* 当前版本：强调色面 + 描边（不只靠背景深浅区分） */
+.version-item.is-current {
+  background: var(--accent-soft);
+  border-color: var(--accent-ring);
+}
+.version-item__no {
+  font-weight: 600;
+}
+.version-item__time {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.version-item__spacer {
+  flex: 1;
+}
+.version-item__current {
+  font-size: 11px;
+  color: var(--accent-hover);
+}
+
+/* ---------- 评估块（预览面板内嵌） ---------- */
+.analysis {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+}
+.analysis__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.analysis__label {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.analysis__score {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+.analysis__band {
+  padding: 0 7px;
+  font-size: 11px;
+  border: 1px solid;
+  border-radius: 10px;
+}
+.analysis__bar {
+  flex: 1 1 90px;
+  min-width: 90px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(240, 246, 252, 0.12);
+}
+.analysis__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.analysis__group {
+  margin-top: 8px;
+}
+.analysis__group-name {
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.analysis__group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.analysis__group-item {
+  display: flex;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.analysis__bullet {
+  flex: 0 0 auto;
+}
+.analysis__text {
+  min-width: 0;
+}
+
+/* ---------- 节点右键菜单（浮层） ---------- */
+.ctx-menu__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.ctx-menu {
+  position: fixed;
+  z-index: 61;
+  width: 216px; /* 与 NodeContextMenu.tsx 的 MENU_WIDTH 保持一致 */
+  padding: 6px;
+  background: var(--material-strong);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-3), var(--edge-highlight);
+  animation: is-materialize var(--dur-fast) var(--ease-out);
+  transform-origin: top left;
+}
+.ctx-menu__header {
+  margin-bottom: 4px;
+  padding: 4px 10px 8px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ctx-menu__item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-1);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.ctx-menu__item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.ctx-menu__item:disabled {
+  color: var(--text-3);
+  cursor: wait;
+}
+.ctx-menu__colors {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 8px 10px 6px;
+  border-top: 1px solid var(--hairline);
+}
+.ctx-menu__colors-label {
+  margin-right: 2px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.ctx-menu__swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* ---------- AI 设置（模态） ---------- */
+/* 复用 .dialog 的材质，但内容是长表单 → 需要整体滚动。
+   ⚠️ 必须把 .dialog 的 flex column 改回 block：flex 子项默认会被压缩，
+   结果是"内容挤扁"而不是"滚动"。 */
+.dialog--scroll {
+  display: block;
+  overflow-y: auto;
+}
+.dialog--roomy {
+  width: 600px;
+}
+/* 模态层级要压过右键菜单（60/61），否则浮层会盖在模态上面 */
+.dialog-backdrop--top {
+  z-index: 70;
+}
+.settings-section {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+.settings-section__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.settings-section__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.settings-section__spacer {
+  flex: 1;
+}
+.settings-note {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.settings-note--warn {
+  color: var(--warn);
+}
+.settings-row {
+  display: flex;
+  gap: 8px;
+}
+/* 横排里输入框吃掉剩余宽度（保存/清除按钮保持自然宽度） */
+.settings-row > .input {
+  flex: 1;
+}
+.settings-form {
+  display: grid;
+  gap: 8px;
+}
+/* 竖排字段的标签（配合 .field-stack） */
+.settings-form__label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.settings-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* 状态徽标：只有 color / border-color 是数据驱动的（走内联），其余是静态外观 */
+.badge {
+  padding: 1px 6px;
+  font-size: 11px;
+  border: 1px solid;
+  border-radius: var(--r-xs);
+}
+.mcp-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+.mcp-list__empty {
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.mcp-item {
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+}
+.mcp-item__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mcp-item__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.mcp-item__state {
+  font-size: 11px;
+}
+.mcp-item__spacer {
+  flex: 1;
+}
+.mcp-item__enable {
+  display: flex;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.mcp-item__cmd {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+  word-break: break-all;
+}
+.mcp-item__err {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--danger);
+  word-break: break-word;
+}
+.mcp-item__tools {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--accent-hover);
+}
+
+/* ---------- 通用小工具 ---------- */
+.btn--sm {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+/* 强调色描边幽灵按钮：面板里的主动作（比实心的 .btn--primary 轻一档） */
+.btn--accent {
+  color: var(--accent-hover);
+  border-color: var(--accent-ring);
+}
+.btn--accent:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.text-muted {
+  color: var(--text-3);
+}
+.text-warn {
+  color: var(--warn);
+}
+
+/* 弹窗顶栏：标题在左、次要信息与关闭按钮靠右 */
+.dialog__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.dialog__head > .dialog__title {
+  margin: 0; /* 行内标题不再自带下方间距，间距由 .dialog__head 统一给 */
+}
+.dialog__head-spacer {
+  flex: 1;
+}
+/* 徽标的两种状态（开/关）：静态外观进类，语义色不进 —— 只有状态本身是数据 */
+.badge--on {
+  color: var(--ok);
+  border-color: rgba(63, 185, 80, 0.35);
+}
+.badge--off {
+  color: var(--text-3);
+  border-color: var(--hairline);
+}
+/* 行内次要说明（徽标旁边的一小句话） */
+.inline-note {
+  font-size: 11px;
+}
+/* 竖排字段：标签在上、控件在下（与横排的 .field 相对）。
+   ⚠️ 必须显式给 100%：<input> 默认宽度由 size 属性决定，在块级容器里会缩成一小截。 */
+.field-stack {
+  display: block;
+}
+.field-stack > .input,
+.field-stack > .textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* 放置评论模式：画布光标变十字，提示"点这里放气泡" */
 .canvas-placing .react-flow__pane {
   cursor: crosshair;
@@ -1398,6 +1907,8 @@ body {
   .comment-node-panel,
   .comment-thread,
   .panel,
+  .preview-panel,
+  .ctx-menu,
   .react-flow .react-flow__controls {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -1414,7 +1925,9 @@ body {
   .trash-bin__panel,
   .comment-bubble,
   .comment-node-panel,
-  .panel {
+  .panel,
+  .preview-panel,
+  .ctx-menu {
     background: var(--bg-raised);
   }
   .comment-thread {
@@ -1439,7 +1952,13 @@ body {
   .comment-btn,
   .comment-bubble,
   .history-item,
-  .dialog {
+  .dialog,
+  .preview-panel,
+  .ctx-menu,
+  .settings-section,
+  .mcp-item,
+  .version-item,
+  .analysis {
     border-color: var(--hairline-strong);
   }
 }

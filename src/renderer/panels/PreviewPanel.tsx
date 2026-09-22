@@ -4,6 +4,12 @@
 // 编辑描述：点「重新生成」**不再直接生成**，而是就地进入编辑态（描述 → 输入框），
 //          编辑后可选择「重新生成」或「保存（不生成）」，也可「取消」。
 //          编辑态的"谁在编辑"存在 store 里（右键菜单同一个入口），此处只渲染。
+//
+// 样式：静态外观走 .preview-panel*（styles.css）。**宽度必须留内联** —— 它来自
+// store（可拖拽），写进 CSS 就拖不动了。
+// ⚠️ DOM 结构有探针契约（probe-d3）：把手必须是面板的**直接子节点**且不在滚动区内
+//    （滚动时把手不能跟着滚走）；面板 overflow:hidden、滚动区 overflow-y:auto；
+//    面板 rect 宽度必须等于 data-width（所以面板上不能有 transform）。
 
 import { useEffect, useState } from 'react'
 import { useTreeStore, PREVIEW_WIDTH_MAX, PREVIEW_WIDTH_MIN } from '../store/treeStore'
@@ -93,32 +99,12 @@ export function PreviewPanel() {
   })
   const proposing = !!node && proposingId === node.id
 
-  const btn: React.CSSProperties = {
-    background: 'transparent',
-    color: '#58a6ff',
-    border: '1px solid #30363d',
-    borderRadius: 6,
-    padding: '3px 10px',
-    fontSize: 12,
-    cursor: 'pointer',
-  }
-
   return (
     <aside
       data-testid="preview-panel"
       data-width={width}
-      style={{
-        width,
-        flex: `0 0 ${width}px`,
-        minWidth: 0,
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        borderLeft: '1px solid #21262d',
-        background: '#0b0f14',
-        boxSizing: 'border-box',
-      }}
+      className="preview-panel"
+      style={{ width, flex: `0 0 ${width}px` }}
     >
       {/* 拖拽把手：贴左边缘，拖动改宽，双击复位 */}
       <div
@@ -129,248 +115,154 @@ export function PreviewPanel() {
         title={`拖动调整宽度（${PREVIEW_WIDTH_MIN}–${PREVIEW_WIDTH_MAX}px，双击复位）`}
         onMouseDown={onResizeStart}
         onDoubleClick={resetPreviewWidth}
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 7,
-          cursor: 'col-resize',
-          zIndex: 5,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: dragging ? '#1f6feb22' : 'transparent',
-        }}
+        className={`preview-panel__resizer${dragging ? ' is-dragging' : ''}`}
       >
-        <div
-          style={{
-            width: 2,
-            height: 40,
-            borderRadius: 2,
-            background: dragging ? '#58a6ff' : '#30363d',
-          }}
-        />
+        <div className="preview-panel__grip" />
       </div>
       {/* 滚动区独立成层：把手在它外面，滚内容时把手不会跟着滚走 */}
-      <div
-        data-testid="preview-scroll"
-        style={{ flex: 1, overflowY: 'auto', padding: 16, boxSizing: 'border-box' }}
-      >
-      <h2 style={{ fontSize: 13, letterSpacing: 0.5, margin: '0 0 12px', color: '#7d8590' }}>
-        节点预览
-      </h2>
-      {!node ? (
-        <p style={{ color: '#7d8590', fontSize: 13, lineHeight: 1.6 }}>
-          点击画布中的节点查看内容。
-        </p>
-      ) : (
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6, color: '#e6edf3' }}>
-            {node.data.label}
-          </div>
+      <div data-testid="preview-scroll" className="preview-panel__scroll">
+        <h2 className="preview-panel__title">节点预览</h2>
+        {!node ? (
+          <p className="preview-panel__empty">点击画布中的节点查看内容。</p>
+        ) : (
+          <div>
+            <div className="preview-panel__name">{node.data.label}</div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            <span
-              data-testid="preview-type"
-              style={{
-                fontSize: 11,
-                color: '#58a6ff',
-                border: '1px solid #1f6feb55',
-                background: '#1f6feb1a',
-                borderRadius: 4,
-                padding: '1px 6px',
-              }}
-            >
-              {TYPE_LABEL[contentType]}
-            </span>
-            <button data-testid="branch-from-node" onClick={() => openDialog(node.id)} style={btn}>
-              从这里发散
-            </button>
-            {/* 入口：进入"编辑描述"，**不触发生成**（生成/不生成在编辑态里再选） */}
-            {!editing && (
+            <div className="preview-panel__actions">
+              <span data-testid="preview-type" className="type-tag">
+                {TYPE_LABEL[contentType]}
+              </span>
               <button
-                data-testid="regenerate-node"
-                onClick={() => beginEditPrompt(node.id)}
-                style={btn}
+                data-testid="branch-from-node"
+                onClick={() => openDialog(node.id)}
+                className="btn btn--sm btn--accent"
               >
-                重新生成
+                从这里发散
               </button>
-            )}
-            {/* 收敛：沿「根 → 本节点」这条链路生成一份方案，产物挂在本节点下 */}
-            <button
-              data-testid="generate-proposal"
-              data-chain-length={chainLength}
-              disabled={proposing || busy}
-              title={`沿「根 → ${node.data.label}」这条链路（${chainLength} 层）生成一份可落地方案`}
-              onClick={() => void generateProposal(node.id)}
-              style={{
-                ...btn,
-                ...(proposing ? { color: '#8b949e', cursor: 'wait' } : { borderColor: '#1f6feb88', color: '#79c0ff' }),
-              }}
-            >
-              {proposing ? '生成方案中…' : `沿链路生成方案（${chainLength} 层）`}
-            </button>
-          </div>
-
-          {/* 描述区：只读展示原始描述；编辑态下变成输入框 + 「重新生成 / 保存（不生成）/ 取消」 */}
-          {(editing || node.data.prompt) && (
-            <div
-              data-testid="preview-prompt"
-              data-editing={editing ? '1' : '0'}
-              style={{
-                marginBottom: 12,
-                padding: '7px 10px',
-                borderLeft: `3px solid ${editing ? '#1f6feb' : '#30363d'}`,
-                background: '#161b22',
-                borderRadius: '0 6px 6px 0',
-                fontSize: 12,
-                lineHeight: 1.6,
-                color: '#8b949e',
-                wordBreak: 'break-word',
-              }}
-            >
-              <span style={{ color: '#6e7681' }}>{editing ? '编辑描述：' : '原始描述：'}</span>
-              {!editing && node.data.prompt}
-
-              {editing && (
-                <>
-                  <textarea
-                    data-testid="prompt-editor"
-                    autoFocus
-                    value={draft}
-                    disabled={busy}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') cancelEditPrompt()
-                    }}
-                    placeholder="这段描述决定接下来怎么发散（留空则无法重新生成）"
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      marginTop: 6,
-                      minHeight: 68,
-                      resize: 'vertical',
-                      background: '#0d1117',
-                      color: '#e6edf3',
-                      border: '1px solid #30363d',
-                      borderRadius: 6,
-                      padding: '6px 8px',
-                      fontSize: 12,
-                      lineHeight: 1.6,
-                      fontFamily: 'inherit',
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                    <button
-                      data-testid="confirm-regenerate"
-                      disabled={busy || !draft.trim()}
-                      title={draft.trim() ? undefined : '描述不能为空'}
-                      onClick={() => void regenerate(node.id, draft)}
-                      style={{
-                        ...btn,
-                        color: busy || !draft.trim() ? '#7d8590' : '#58a6ff',
-                        cursor: busy ? 'wait' : draft.trim() ? 'pointer' : 'not-allowed',
-                      }}
-                    >
-                      {busy ? '重新生成中…' : '重新生成'}
-                    </button>
-                    <button
-                      data-testid="save-prompt"
-                      disabled={busy}
-                      title="只保存描述，不重新生成"
-                      onClick={() => void savePrompt(node.id, draft)}
-                      style={{ ...btn, color: busy ? '#7d8590' : '#e6edf3' }}
-                    >
-                      保存（不生成）
-                    </button>
-                    <button
-                      data-testid="cancel-edit"
-                      disabled={busy}
-                      onClick={cancelEditPrompt}
-                      style={{ ...btn, color: '#7d8590' }}
-                    >
-                      取消
-                    </button>
-                  </div>
-                </>
+              {/* 入口：进入"编辑描述"，**不触发生成**（生成/不生成在编辑态里再选） */}
+              {!editing && (
+                <button
+                  data-testid="regenerate-node"
+                  onClick={() => beginEditPrompt(node.id)}
+                  className="btn btn--sm btn--accent"
+                >
+                  重新生成
+                </button>
               )}
-            </div>
-          )}
-
-          <AnalysisBlock analysis={node.data.analysis} />
-
-          <ContentPreview contentType={contentType} content={node.data.content ?? ''} />
-
-          {versions.length > 0 && (
-            <div data-testid="version-history" style={{ marginTop: 20 }}>
-              <h3
-                style={{
-                  fontSize: 12,
-                  letterSpacing: 0.5,
-                  color: '#7d8590',
-                  margin: '0 0 8px',
-                  borderTop: '1px solid #21262d',
-                  paddingTop: 12,
-                }}
+              {/* 收敛：沿「根 → 本节点」这条链路生成一份方案，产物挂在本节点下 */}
+              <button
+                data-testid="generate-proposal"
+                data-chain-length={chainLength}
+                disabled={proposing || busy}
+                title={`沿「根 → ${node.data.label}」这条链路（${chainLength} 层）生成一份可落地方案`}
+                onClick={() => void generateProposal(node.id)}
+                className="btn btn--sm btn--accent"
               >
-                版本历史（{versions.length}）
-              </h3>
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                {[...versions].reverse().map((v) => {
-                  const index = versions.indexOf(v) + 1
-                  const isCurrent = v.id === currentVersionId
-                  return (
-                    <li
-                      key={v.id}
-                      data-testid="version-item"
-                      data-current={isCurrent ? '1' : '0'}
-                      data-version={index}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '6px 8px',
-                        marginBottom: 4,
-                        borderRadius: 6,
-                        background: isCurrent ? '#1f6feb1a' : '#161b22',
-                        border: `1px solid ${isCurrent ? '#1f6feb55' : '#21262d'}`,
-                        fontSize: 12,
-                        color: '#c9d1d9',
-                      }}
-                    >
-                      <span style={{ fontWeight: 600 }}>v{index}</span>
-                      <span style={{ color: '#7d8590', fontSize: 11 }}>{shortTime(v.createdAt)}</span>
-                      <span style={{ flex: 1 }} />
-                      {isCurrent ? (
-                        <span style={{ color: '#58a6ff', fontSize: 11 }}>当前</span>
-                      ) : (
-                        <button
-                          data-testid="version-revert"
-                          data-version={index}
-                          onClick={() => void setVersion(node.id, v.id)}
-                          style={{
-                            background: 'transparent',
-                            color: '#58a6ff',
-                            border: '1px solid #30363d',
-                            borderRadius: 4,
-                            padding: '1px 8px',
-                            fontSize: 11,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          翻案
-                        </button>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
+                {proposing ? '生成方案中…' : `沿链路生成方案（${chainLength} 层）`}
+              </button>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* 描述区：只读展示原始描述；编辑态下变成输入框 + 「重新生成 / 保存（不生成）/ 取消」 */}
+            {(editing || node.data.prompt) && (
+              <div
+                data-testid="preview-prompt"
+                data-editing={editing ? '1' : '0'}
+                className={`preview-panel__prompt${editing ? ' is-editing' : ''}`}
+              >
+                <span className="preview-panel__prompt-label">
+                  {editing ? '编辑描述：' : '原始描述：'}
+                </span>
+                {!editing && node.data.prompt}
+
+                {editing && (
+                  <>
+                    <textarea
+                      data-testid="prompt-editor"
+                      autoFocus
+                      value={draft}
+                      disabled={busy}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') cancelEditPrompt()
+                      }}
+                      placeholder="这段描述决定接下来怎么发散（留空则无法重新生成）"
+                      className="textarea preview-panel__editor"
+                    />
+                    <div className="preview-panel__edit-actions">
+                      <button
+                        data-testid="confirm-regenerate"
+                        disabled={busy || !draft.trim()}
+                        title={draft.trim() ? undefined : '描述不能为空'}
+                        onClick={() => void regenerate(node.id, draft)}
+                        className="btn btn--sm btn--accent"
+                      >
+                        {busy ? '重新生成中…' : '重新生成'}
+                      </button>
+                      <button
+                        data-testid="save-prompt"
+                        disabled={busy}
+                        title="只保存描述，不重新生成"
+                        onClick={() => void savePrompt(node.id, draft)}
+                        className="btn btn--sm"
+                      >
+                        保存（不生成）
+                      </button>
+                      <button
+                        data-testid="cancel-edit"
+                        disabled={busy}
+                        onClick={cancelEditPrompt}
+                        className="btn btn--sm text-muted"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            <AnalysisBlock analysis={node.data.analysis} />
+
+            <ContentPreview contentType={contentType} content={node.data.content ?? ''} />
+
+            {versions.length > 0 && (
+              <div data-testid="version-history" className="preview-panel__history">
+                <h3 className="preview-panel__history-title">版本历史（{versions.length}）</h3>
+                <ul className="version-list">
+                  {[...versions].reverse().map((v) => {
+                    const index = versions.indexOf(v) + 1
+                    const isCurrent = v.id === currentVersionId
+                    return (
+                      <li
+                        key={v.id}
+                        data-testid="version-item"
+                        data-current={isCurrent ? '1' : '0'}
+                        data-version={index}
+                        className={`version-item${isCurrent ? ' is-current' : ''}`}
+                      >
+                        <span className="version-item__no">v{index}</span>
+                        <span className="version-item__time">{shortTime(v.createdAt)}</span>
+                        <span className="version-item__spacer" />
+                        {isCurrent ? (
+                          <span className="version-item__current">当前</span>
+                        ) : (
+                          <button
+                            data-testid="version-revert"
+                            data-version={index}
+                            onClick={() => void setVersion(node.id, v.id)}
+                            className="btn btn--sm btn--accent"
+                          >
+                            翻案
+                          </button>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   )
