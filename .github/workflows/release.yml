@@ -1,0 +1,56 @@
+# 打 tag 发版 → 构建安装包 → 上传到 GitHub Release（不只是 Actions Artifacts）
+# 与 build.yml 的区别就在最后一步：
+#   · build.yml  用 `--publish never`，产物只进 Artifacts（人工下载分发）
+#   · 本文件     用 `--publish always`，产物 + latest.yml 进 Release（自动更新读这里）
+#
+# ⚠️ 发布必须是「已发布」而非 draft：electron-builder 对 GitHub 默认发 draft，
+#    而 electron-updater 会跳过 draft（表现为"永远提示已是最新"）。
+#    electron-builder.yml 里已写死 `releaseType: release`，别在 UI 改回 draft。
+# ⚠️ 版本号来自 package.json 的 version。发版前先改 version 并提交，否则 tag 与包内版本不一致。
+#
+# macOS 未签名基本无法自动更新（Squirrel.Mac 要求已签名）→ 要真自动更新须配 Apple 证书，
+# 把 macos 任务里的 CSC_IDENTITY_AUTO_DISCOVERY: false 删掉/改 true，并配 Secrets。
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# electron-builder 要往 Release 传文件，需要写 contents 的权限
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build:main
+      - run: npm run build:renderer
+      - name: 打包并发布 Windows 安装包
+        # --publish always 才会真正上传；漏了它只会本地出包，Release 是空的。
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build:main
+      - run: npm run build:renderer
+      - name: 打包并发布 macOS（dmg + zip，x64 与 arm64）
+        run: npx electron-builder --mac --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
