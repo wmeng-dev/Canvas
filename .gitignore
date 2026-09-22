@@ -25,11 +25,13 @@ userData/
 .a*.log
 # 回归/类型检查的日志落盘（Windows 上 stdout 常丢，只能写文件再读）
 *.out.txt
-# Local verification artifacts (electron screenshots / probes)
+# Local verification artifacts (electron screenshots)
 /canvas-screenshot.png
 /export-html-screenshot.png
 /ui-*.png
-probe-*.cjs
+# ⚠️ 探针**已纳入版本控制**：tests/e2e/probe-*.cjs
+# 这里原本有一条 `probe-*.cjs` 忽略规则，结果是整个 UI 回归套件只存在于本机：
+# 新克隆的仓库零 UI 验证、另一台机器拿不到探针修复。别再把它加回来。
 # OS
 Thumbs.db
 Desktop.ini

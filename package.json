@@ -13,7 +13,9 @@
     "dist:win": "node scripts/dist-win.cjs",
     "dist:dir": "npm run build:main && tsc -p tsconfig.json --noEmit && vite build && node scripts/dist.cjs --win --dir",
     "icon": "node scripts/make-icon.cjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "verify": "node scripts/verify.cjs",
+    "test": "node scripts/verify.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",

@@ -1,7 +1,7 @@
 // C.3 主进程装配：服务(存储+生成器) → IPC handlers → 窗口(preload)。
 // 拆出可复用函数，main.ts 只负责调用 bootstrap()。
 
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, Menu, shell } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as http from 'http'
@@ -13,10 +13,42 @@ import { createSecretBox } from './secret-box'
 
 const DEV_SERVER_URL = 'http://localhost:5173'
 
+/** 数据目录：默认 userData/ideasprout，可用 IDEASPROUT_DATA_DIR 覆盖（测试/多套数据靠它）。 */
+export function resolveDataDir(): string {
+  return process.env.IDEASPROUT_DATA_DIR || path.join(app.getPath('userData'), 'ideasprout')
+}
+
+/**
+ * 主进程全局错误兜底。
+ *
+ * 为什么必须落盘：**打包后的 Windows 应用没有附着的控制台**，`console.error` 等于扔进黑洞 ——
+ * 用户只会看到"窗口突然没了"，我们这边什么都拿不到。日志写到
+ * `<dataDir>/logs/main.log`，超过 256KB 就重开一份（不做复杂轮转）。
+ *
+ * 装上 handler 之后进程不会再因未捕获异常直接退出 —— 对桌面应用这是更好的取舍
+ * （数据本来就随改随存，死在半路比"悄悄消失"更容易排查），所以这里只记录不退出。
+ */
+export function installErrorHandlers(): void {
+  const write = (kind: string, detail: unknown) => {
+    const stack = detail instanceof Error ? detail.stack || detail.message : String(detail)
+    const line = `[${new Date().toISOString()}] ${kind}: ${stack}\n`
+    console.error(`[ideasprout] ${line.trim()}`)
+    try {
+      const file = path.join(resolveDataDir(), 'logs', 'main.log')
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      if (fs.existsSync(file) && fs.statSync(file).size > 256 * 1024) fs.writeFileSync(file, line)
+      else fs.appendFileSync(file, line)
+    } catch {
+      /* 日志写不进去也不能再抛（否则会递归进 handler） */
+    }
+  }
+  process.on('uncaughtException', (err) => write('未捕获异常', err))
+  process.on('unhandledRejection', (reason) => write('未处理的 Promise 拒绝', reason))
+}
+
 /** 依据环境变量组装主进程服务。 */
 export function createAppServices(): AppServices {
-  const dataDir =
-    process.env.IDEASPROUT_DATA_DIR || path.join(app.getPath('userData'), 'ideasprout')
+  const dataDir = resolveDataDir()
   // 应用改名后数据目录会整体挪位（父目录 = 应用名，子目录 = 品牌名），
   // 不迁移的话用户会以为"画布全没了"。这里把旧目录**复制**过来（旧目录保留不动）。
   if (!process.env.IDEASPROUT_DATA_DIR) {
@@ -58,6 +90,73 @@ export function shouldLoadDist(): boolean {
   return app.isPackaged || process.env.IDEASPROUT_FORCE_DIST === '1'
 }
 
+/** 生产态渲染产物目录（file:// 白名单只放行这里面的东西）。 */
+const DIST_RENDERER_DIR = path.resolve(__dirname, '../../dist/renderer')
+
+/**
+ * 渲染端可能自己发起的"合法"导航：
+ *   · about: —— srcdoc 沙箱 iframe（预览 html/svg）
+ *   · file:  —— **只限我们自己的构建产物目录**。不能放行任意 file:，
+ *               否则生成内容里一个 `[x](file:///C:/…)` 同样能把应用界面换掉。
+ *   · dev server —— 开发态
+ * 其余一律视为"要跑到应用外面去"。
+ * （导出是为了让 probe-security.cjs 能直接断言判定结果 —— 纯函数，比"试着导航一下看看"精确得多。）
+ */
+export function isInternalUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw)
+    if (u.protocol === 'about:') return true
+    if (u.protocol === 'file:') {
+      // Windows 的 file URL 形如 file:///E:/a/b.html，pathname 是 /E:/a/b.html（多一个前导斜杠）；
+      // POSIX 的 pathname 本身就是绝对路径，去掉前导斜杠反而会变成相对路径。故分平台处理。
+      const p = decodeURIComponent(u.pathname)
+      const abs = process.platform === 'win32' ? path.resolve(p.replace(/^[/\\]/, '')) : path.resolve(p)
+      return abs === DIST_RENDERER_DIR || abs.startsWith(DIST_RENDERER_DIR + path.sep)
+    }
+    return u.origin === DEV_SERVER_URL
+  } catch {
+    return false
+  }
+}
+
+/** 只把 http/https 交给系统浏览器；file:、自定义协议、javascript: 一律丢弃。 */
+function openExternalIfSafe(raw: string): void {
+  try {
+    const u = new URL(raw)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return
+    void shell.openExternal(u.toString())
+  } catch {
+    /* 不是合法 URL：忽略 */
+  }
+}
+
+/**
+ * 外链与跳转防护。
+ *
+ * 主窗口本身就是"应用"：一旦被内容导航走就回不来（没有后退/刷新，用户只能重启），
+ * 而且那个远程页面会跑在挂着 `window.ideasprout` 的窗口里。
+ *
+ * 当前唯一会把外部地址交出去的入口是 **markdown 预览** —— react-markdown 默认把
+ * `[文字](https://…)` 渲染成真 <a href>（html/svg 走 `<iframe sandbox="">` 已被隔离）。
+ * 这里挂在 `web-contents-created` 上，是为了把之后新增的任何 WebContents 一并覆盖，
+ * 而不是只盯着眼前这一个窗口。
+ */
+function installNavigationGuards(): void {
+  app.on('web-contents-created', (_event, contents) => {
+    // window.open / target=_blank：一律不开新窗口，能把浏览器做的事交给系统浏览器。
+    contents.setWindowOpenHandler(({ url }) => {
+      openExternalIfSafe(url)
+      return { action: 'deny' }
+    })
+    // 页面内发起的跳转（含点 <a href>）：出站就拦下来，改交给系统浏览器。
+    contents.on('will-navigate', (event, url) => {
+      if (isInternalUrl(url)) return
+      event.preventDefault()
+      openExternalIfSafe(url)
+    })
+  })
+}
+
 // 开发模式：等 Vite dev server 就绪再 loadURL。
 function waitForServer(url: string, timeoutMs = 30000): Promise<void> {
   const u = new URL(url)
@@ -78,15 +177,17 @@ function waitForServer(url: string, timeoutMs = 30000): Promise<void> {
 }
 
 export function createMainWindow(): BrowserWindow {
+  // 窗口/任务栏图标：开发态从源码目录取（打包后由 exe/dmg 自带图标，找不到就退回默认）。
+  // ⚠️ 文件不存在时要**整个键都不给**，不能写 `icon: undefined` —— 键在就会被 Electron
+  // 拿去建 NativeImage，于是每次建窗都刷一条 `Argument must be a file path or a NativeImage`
+  // 警告（探针日志里会淹没真正有用的报错）。
+  const iconPath = path.join(app.getAppPath(), 'build', 'icon.ico')
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
     title: '风衍 IdeaSprout',
     backgroundColor: '#0d1117',
-    // 窗口/任务栏图标：开发态从源码目录取（打包后由 exe/dmg 自带图标，找不到就退回默认）。
-    icon: fs.existsSync(path.join(app.getAppPath(), 'build', 'icon.ico'))
-      ? path.join(app.getAppPath(), 'build', 'icon.ico')
-      : undefined,
+    ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -110,6 +211,12 @@ export function createMainWindow(): BrowserWindow {
 }
 
 export function bootstrap(): void {
+  // 错误兜底要第一个装：后面任何一步（建窗口、装配服务）抛出的未捕获异常
+  // 都应该留下痕迹，而不是让打包后的应用"静默消失"。
+  installErrorHandlers()
+  // 防护必须在建窗口之前挂好，否则第一个窗口的 WebContents 会漏掉。
+  installNavigationGuards()
+
   app.whenReady().then(() => {
     // 不要系统默认菜单（File / Edit / View / Window / Help）：那是 Electron 在 dev 下
     // 露出来的"开发者残影"（含 Reload / Toggle Developer Tools / About 等），产品里显得业余。
