@@ -18,11 +18,14 @@
 #      路径形如 ...\winCodeSign\<hash>\darwin\10.12\lib\libcrypto.dylib。
 # 原因：winCodeSign 包里含 macOS 符号链接，而 Windows 创建符号链接需要特权
 #      （开发者模式 或 管理员）。electron-builder 需要它来给 exe 打图标/版本信息。
-# 解法（任一）：
-#   1) 开启「设置 → 隐私和安全性 → 开发者选项 → 开发人员模式」（推荐，一次设置永久生效）
-#   2) 以管理员身份运行打包命令
-#   3) 临时绕过（代价：exe 不带自定义图标/版本信息）：
-#      node scripts/dist.cjs --win --dir -c.win.signAndEditExecutable=false
+# 解法：
+#   1) 打 Windows 包一律用 scripts/dist-win.cjs —— 它先按标准姿势试一次，
+#      撞上这个错误才兜底（--dir → 手工 rcedit 补图标/版本 → --prepackaged 压包），
+#      并把补丁读回字节校验。**推荐**，不需要动系统设置。
+#   2) 一劳永逸：开启「设置 → 隐私和安全性 → 开发者选项 → 开发人员模式」（需管理员），
+#      之后标准姿势一把过，压根不会走到兜底。以管理员身份运行打包命令同理。
+#   3) 别图省事只加 -c.win.signAndEditExecutable=false 一把过 —— 那会让 exe
+#      丢掉自定义图标和版本信息（快捷方式/任务管理器/文件属性全是默认 Electron 的样子）。
 
 appId: cn.wmeng.ideasprout
 productName: 风衍 IdeaSprout
