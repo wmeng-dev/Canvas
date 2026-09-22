@@ -10,6 +10,7 @@ import { migrateLegacyDataDir } from '../core/storage/data-dir'
 import type { AppServices } from '../core/services'
 import { registerIpcHandlers, syncAiBackendsOnStartup } from './ipc/handlers'
 import { createSecretBox } from './secret-box'
+import { installAutoUpdate } from './auto-update'
 
 const DEV_SERVER_URL = 'http://localhost:5173'
 
@@ -28,22 +29,30 @@ export function resolveDataDir(): string {
  * 装上 handler 之后进程不会再因未捕获异常直接退出 —— 对桌面应用这是更好的取舍
  * （数据本来就随改随存，死在半路比"悄悄消失"更容易排查），所以这里只记录不退出。
  */
-export function installErrorHandlers(): void {
-  const write = (kind: string, detail: unknown) => {
-    const stack = detail instanceof Error ? detail.stack || detail.message : String(detail)
-    const line = `[${new Date().toISOString()}] ${kind}: ${stack}\n`
-    console.error(`[ideasprout] ${line.trim()}`)
-    try {
-      const file = path.join(resolveDataDir(), 'logs', 'main.log')
-      fs.mkdirSync(path.dirname(file), { recursive: true })
-      if (fs.existsSync(file) && fs.statSync(file).size > 256 * 1024) fs.writeFileSync(file, line)
-      else fs.appendFileSync(file, line)
-    } catch {
-      /* 日志写不进去也不能再抛（否则会递归进 handler） */
-    }
+/**
+ * 往 `<dataDir>/logs/main.log` 追加一行。
+ *
+ * 单独提成导出函数（而不是留在 installErrorHandlers 内部的闭包）的原因：
+ * **自动更新也要写同一份日志**（见 auto-update.ts）。打包后的应用没有控制台，
+ * "更新为什么没生效"只能靠这份文件回答，所以它必须能被主进程各处复用。
+ */
+export function writeMainLog(kind: string, detail: unknown): void {
+  const stack = detail instanceof Error ? detail.stack || detail.message : String(detail)
+  const line = `[${new Date().toISOString()}] ${kind}: ${stack}\n`
+  console.error(`[ideasprout] ${line.trim()}`)
+  try {
+    const file = path.join(resolveDataDir(), 'logs', 'main.log')
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    if (fs.existsSync(file) && fs.statSync(file).size > 256 * 1024) fs.writeFileSync(file, line)
+    else fs.appendFileSync(file, line)
+  } catch {
+    /* 日志写不进去也不能再抛（否则会递归进 handler） */
   }
-  process.on('uncaughtException', (err) => write('未捕获异常', err))
-  process.on('unhandledRejection', (reason) => write('未处理的 Promise 拒绝', reason))
+}
+
+export function installErrorHandlers(): void {
+  process.on('uncaughtException', (err) => writeMainLog('未捕获异常', err))
+  process.on('unhandledRejection', (reason) => writeMainLog('未处理的 Promise 拒绝', reason))
 }
 
 /** 依据环境变量组装主进程服务。 */
@@ -233,6 +242,9 @@ export function bootstrap(): void {
     const services = createAppServices()
     registerIpcHandlers(services)
     createMainWindow()
+    // 自动更新：只在打包态启用，且内部有 8s 延迟 —— 不与开窗、拉 MCP 子进程抢 I/O。
+    // 必须放在 createMainWindow() 之后：更新完成后的询问对话框要挂到主窗口上。
+    installAutoUpdate({ log: writeMainLog })
     // 后台接起已配置的 AI 后端（MCP 要拉子进程，不能阻塞开窗）
     void syncAiBackendsOnStartup(services)
     app.on('activate', () => {

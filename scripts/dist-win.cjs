@@ -64,6 +64,65 @@ function copyright() {
   return m ? m[1].trim() : ''
 }
 
+/**
+ * 与 app-builder-lib 的 AppInfo.updaterCacheDirName **同源**：
+ *   sanitizeFileName(package.json 的 name).toLowerCase() + '-updater'
+ * （见 node_modules/app-builder-lib/out/appInfo.js:122-127）。
+ * 写错不致命，但会在用户机器上多留一套更新缓存目录 —— 所以这里不做手拼，走同一个 sanitizer。
+ */
+function updaterCacheDirName() {
+  let sanitize
+  try {
+    sanitize = require('sanitize-filename')
+  } catch {
+    sanitize = (s) => String(s).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+  }
+  return sanitize(pkg.name).toLowerCase() + '-updater'
+}
+
+/**
+ * 补齐 resources/app-update.yml —— 客户端自动更新的"托管地址清单"。
+ *
+ * 为什么必须补：electron-builder 只在 afterPack 钩子里写它，且**仅当本次构建目标满足
+ * isSuitableWindowsTarget（nsis）**（app-builder-lib/out/publish/PublishManager.js:88）；
+ * 而兜底流程最后一步是 `--prepackaged`，platformPackager.js:143 有一句
+ * `if (packagerOptions.prepackaged != null) return;` —— doPack 直接提前返回，
+ * afterPack 根本不会被调用。所以**兜底流程必然缺这个文件**，打包出来的 exe 一启动
+ * 就报 "Cannot find app-update.yml"，自动更新彻底不工作（且是静默的，用户看不出来）。
+ *
+ * 已经存在就**不覆盖**：标准姿势下 electron-builder 自己写的那份是权威版本，
+ * 这里只在它缺席时补位。内容由 electron-builder.yml 的 publish 段推导，字段与官方一致。
+ */
+function ensureAppUpdateYml(resourcesDir, label) {
+  if (!fs.existsSync(resourcesDir)) {
+    console.log(`[updater] ⚠ 找不到 ${path.relative(ROOT, resourcesDir)}，跳过 app-update.yml`)
+    return false
+  }
+  const file = path.join(resourcesDir, 'app-update.yml')
+  if (fs.existsSync(file)) {
+    console.log(`[updater] ✓ app-update.yml 已存在（electron-builder 生成，${label}）`)
+    return true
+  }
+  let yaml
+  try {
+    yaml = require('js-yaml')
+  } catch {
+    console.log('[updater] ⚠ 拿不到 js-yaml，无法补写 app-update.yml（自动更新会不可用）')
+    return false
+  }
+  const conf = yaml.load(fs.readFileSync(path.join(ROOT, 'electron-builder.yml'), 'utf8')) || {}
+  const publish = Array.isArray(conf.publish) ? conf.publish[0] : conf.publish
+  if (!publish || !publish.provider) {
+    console.log('[updater] ⚠ electron-builder.yml 里没有 publish 配置，无法补写 app-update.yml')
+    return false
+  }
+  const payload = { ...publish, updaterCacheDirName: updaterCacheDirName() }
+  fs.writeFileSync(file, yaml.dump(payload))
+  console.log(`[updater] ✓ 已补写 app-update.yml（${label}）→ ${path.relative(ROOT, file)}`)
+  console.log(`[updater]   ${JSON.stringify(payload)}`)
+  return true
+}
+
 /** 输出目录：显式指定优先；否则 release-win-<yyyymmdd-HHMM>，撞名/被占用就用下一个 */
 function pickOutDir() {
   if (outArg) return path.resolve(ROOT, outArg)
@@ -334,6 +393,7 @@ async function main() {
   if (DIR_ONLY) {
     const r = runElectronBuilder(['--win', '--dir', ...ebArgs(out), '-c.win.signAndEditExecutable=false'])
     if (r.status !== 0) fail('--dir-only 打包失败')
+    ensureAppUpdateYml(path.join(out, 'win-unpacked', 'resources'), '--dir-only')
     report([out])
     return
   }
@@ -344,6 +404,7 @@ async function main() {
     const r = runElectronBuilder(['--win', ...ebArgs(out)], { capture: true })
     if (r.status === 0) {
       console.log('\n✓ 标准姿势成功（本机具备符号链接特权，无需兜底）')
+      ensureAppUpdateYml(path.join(out, 'win-unpacked', 'resources'), '标准姿势')
       report([out])
       return
     }
@@ -387,6 +448,9 @@ async function main() {
   }
 
   console.log('[2.3] 用已打补丁的目录压 NSIS 安装包')
+  // 必须在 --prepackaged **之前**补：这一步之后的 afterPack 不会被调用，
+  // 而 --prepackaged 是原样压包，所以补在这里才能进安装包。
+  ensureAppUpdateYml(path.join(out, 'win-unpacked', 'resources'), '兜底流程')
   const instDir = path.join(out, 'installer')
   const instRes = runElectronBuilder([
     '--win',
