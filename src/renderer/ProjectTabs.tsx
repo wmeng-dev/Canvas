@@ -138,7 +138,7 @@ export function ProjectTabs({ onOpenHistory }: { onOpenHistory: () => void }) {
         className="project-tab-new"
         disabled={switchingProject}
         onClick={() => void createProject()}
-        title="新建一张空白画布"
+        title="新建一张空白画布（第一次发散时会让你定主题，作为顶层节点）"
       >
         {switchingProject ? '切换中…' : '＋ 新建画布'}
       </button>

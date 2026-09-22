@@ -181,7 +181,7 @@ interface TreeState {
   loadProject: (file: ProjectFile) => void
   /** 重新拉取画布列表（tab 条）；无主进程时静默跳过 */
   loadProjects: () => Promise<void>
-  /** 新建一张**空白**画布并切过去 */
+  /** 新建一张**空白**画布并切过去（顶层主题节点留到第一次发散时按需立起） */
   createProject: () => Promise<void>
   /** 切到某个已存在的画布 */
   switchProject: (projectId: string) => Promise<void>
@@ -208,7 +208,20 @@ interface TreeState {
   openMenu: (nodeId: string, x: number, y: number) => void
   closeMenu: () => void
 
-  generate: (prompt: string, generatorId?: string, contentType?: ContentType, count?: number) => Promise<void>
+  /**
+   * 发散。**默认父节点 = 画布的顶层主题节点**（不是"根层"）—— 一次发散 N 条得到的是
+   * 同一主题下的 N 个兄弟，而不是 N 个并列的孤立根节点。
+   * 画布还没有顶层节点时先按 `theme` 立一个（`theme` 为空则叫「创意主题」）。
+   */
+  generate: (
+    prompt: string,
+    generatorId?: string,
+    contentType?: ContentType,
+    count?: number,
+    theme?: string,
+  ) => Promise<void>
+  /** "AI 生成主题"：返回一句主题（不落库）。失败抛错，由对话框就地显示。 */
+  suggestTheme: (hint?: string) => Promise<string>
   /**
    * 用（可能编辑过的）描述重新生成一版。不传描述则沿用节点原描述。
    * 成功后退出编辑态。
@@ -652,6 +665,13 @@ const createdTreeStore = create<TreeState>((set, get) => {
     }
   },
 
+  suggestTheme: async (hint) => {
+    const api = window.ideasprout
+    if (!api) throw new Error('需要主进程支持才能生成主题')
+    const res = await api.suggestTheme({ hint })
+    return res.theme
+  },
+
   switchProject: async (projectId) => {
     const api = window.ideasprout
     const { projectId: currentId } = get()
@@ -748,30 +768,55 @@ const createdTreeStore = create<TreeState>((set, get) => {
   openMenu: (nodeId, x, y) => set({ menu: { nodeId, x, y } }),
   closeMenu: () => set({ menu: null }),
 
-  generate: async (prompt, generatorId, contentType, count = 1) => {
+  generate: async (prompt, generatorId, contentType, count = 1, theme) => {
     const trimmed = prompt.trim()
     if (!trimmed) {
       set({ error: '请输入一个想法描述。' })
       return
     }
+    const api = window.ideasprout
     const { dialogParentId, nodes, projectId } = get()
-    const siblings = nodes.filter((n) => (n.data.parentId ?? null) === dialogParentId).length
-    const position = computePosition(nodes, dialogParentId, siblings)
-    // 父节点原本是收起的 → 生成成功后自动展开它：
-    // 否则新生成的子节点会立刻被父节点的收起状态藏起来，用户会以为"生成没生效"。
-    const parentWasCollapsed = dialogParentId
-      ? (nodes.find((n) => n.id === dialogParentId)?.data.collapsed ?? false)
-      : false
-    const expandParent = (list: CreativeNode[]) =>
-      parentWasCollapsed && dialogParentId
-        ? list.map((n) =>
-            n.id === dialogParentId ? { ...n, data: { ...n.data, collapsed: false } } : n,
-          )
-        : list
     set({ generating: true, error: null, warning: null, menu: null })
 
-    const api = window.ideasprout
+    // 主题节点是"补建顶层节点"这一步的副产物：无论后面生成成功与否都要落进画布，
+    // 所以声明在 try 之外，好让 catch 也能把它补上（否则磁盘上有、画布上没有）。
+    let themeNode: CreativeNode | null = null
     try {
+      // ---- 解析真正的父节点 ----
+      // 默认父节点是**画布的顶层主题节点**，而不是"根层"：一次发散 N 条应当得到
+      // 同一主题下的 N 个兄弟，而不是 N 个并列的孤立根节点（那正是画布看起来散的原因）。
+      let parentId = dialogParentId
+      if (!parentId) {
+        const top = nodes.find((n) => n.type !== 'comment' && (n.data.parentId ?? null) === null)
+        if (top) {
+          parentId = top.id
+        } else if (api && projectId) {
+          // 画布还没有顶层节点（新建后的空白画布）→ 先按用户给的主题立一个。
+          // 这一步要落库，所以走 IPC（主题也顺便存进节点的 prompt）。
+          const res = await api.ensureThemeRoot({ projectId, theme })
+          // index 只在节点缺坐标时用于兜底排布；主题节点一定带 {0,0}，这里传 0 即可
+          themeNode = toCreativeNode(res.node, 0)
+          parentId = themeNode.id
+        }
+      }
+      // 布局必须基于"含刚建出来的主题节点"的那份列表：否则 computePosition 找不到父节点，
+      // 会退化成按根层纵向排 —— 子节点会跑到别处，而不是主题节点的右边。
+      const baseNodes = themeNode ? [...nodes, themeNode] : nodes
+      const siblings = baseNodes.filter((n) => (n.data.parentId ?? null) === parentId).length
+      const position = computePosition(baseNodes, parentId, siblings)
+      // 父节点原本是收起的 → 生成成功后自动展开它：
+      // 否则新生成的子节点会立刻被父节点的收起状态藏起来，用户会以为"生成没生效"。
+      const parentWasCollapsed = parentId
+        ? (baseNodes.find((n) => n.id === parentId)?.data.collapsed ?? false)
+        : false
+      const expandParent = (list: CreativeNode[]) =>
+        parentWasCollapsed && parentId
+          ? list.map((n) =>
+              n.id === parentId ? { ...n, data: { ...n.data, collapsed: false } } : n,
+            )
+          : list
+      const withTheme = (list: CreativeNode[]) => (themeNode ? [...list, themeNode] : list)
+
       if (!api) {
         // 无主进程：本地占位，保证对话框在纯浏览器下也可用
         const created: CreativeNode[] = Array.from({ length: count }, (_, i) => {
@@ -788,18 +833,18 @@ const createdTreeStore = create<TreeState>((set, get) => {
               analysis: null,
               status: 'done',
               prompt: trimmed,
-              parentId: dialogParentId,
+              parentId,
             },
           }
         })
         set((s) => ({
-          nodes: expandParent([...s.nodes, ...created]),
+          nodes: expandParent(withTheme([...s.nodes, ...created])),
           edges: [
             ...s.edges,
-            ...(dialogParentId
+            ...(parentId
               ? created.map((c) => ({
                   id: `e-${c.id}`,
-                  source: dialogParentId,
+                  source: parentId,
                   target: c.id,
                   animated: true,
                 }))
@@ -815,7 +860,7 @@ const createdTreeStore = create<TreeState>((set, get) => {
       if (!projectId) throw new Error('项目尚未加载')
       const res = await api.generateNode({
         projectId,
-        parentNodeId: dialogParentId,
+        parentNodeId: parentId,
         prompt: trimmed,
         generatorId,
         contentType,
@@ -823,12 +868,12 @@ const createdTreeStore = create<TreeState>((set, get) => {
         position,
       })
       // 父节点原本收起 → 一并落库为展开，避免刷新后又收回去（本地改动已在 expandParent 里做）
-      if (parentWasCollapsed && dialogParentId) {
-        await api.setNodeCollapsed({ projectId, nodeId: dialogParentId, collapsed: false })
+      if (parentWasCollapsed && parentId) {
+        await api.setNodeCollapsed({ projectId, nodeId: parentId, collapsed: false })
       }
       const created = res.items.map((it, i) => toCreativeNode(it.node, i))
       set((s) => ({
-        nodes: expandParent([...s.nodes, ...created]),
+        nodes: expandParent(withTheme([...s.nodes, ...created])),
         edges: [
           ...s.edges,
           ...res.items
@@ -850,7 +895,11 @@ const createdTreeStore = create<TreeState>((set, get) => {
             : null,
       }))
     } catch (e) {
-      set({ generating: false, error: `生成失败：${(e as Error).message}` })
+      set((s) => ({
+        nodes: themeNode ? [...s.nodes, themeNode] : s.nodes,
+        generating: false,
+        error: `生成失败：${(e as Error).message}`,
+      }))
     }
   },
 

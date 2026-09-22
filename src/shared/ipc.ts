@@ -40,6 +40,10 @@ export const IPC = {
   setNodePosition: 'ideasprout:setNodePosition',
   listProjects: 'ideasprout:listProjects',
   createProject: 'ideasprout:createProject',
+  /** 取/建画布的顶层主题节点（发散的默认父节点） */
+  ensureThemeRoot: 'ideasprout:ensureThemeRoot',
+  /** 发散对话框里"AI 生成主题"：只产出**一句主题字符串**，不落库、不建节点 */
+  suggestTheme: 'ideasprout:suggestTheme',
   switchProject: 'ideasprout:switchProject',
   /** 关闭画布 tab（**不删数据**）：只是从 tab 条移除，可再从"已关闭"恢复 */
   closeProject: 'ideasprout:closeProject',
@@ -173,9 +177,41 @@ export interface ListProjectsResponse {
   projects: ProjectSummary[]
 }
 
-/** 新建画布：name 为空时用默认名「未命名画布」 */
+/** 新建画布：仍是**空白页**；name 为空时用默认名「未命名画布」 */
 export interface CreateProjectRequest {
   name?: string
+}
+
+/**
+ * 取/建画布的**顶层主题节点**。
+ *
+ * 用途：发散时若画布还没有顶层节点（新建后的空白画布），先调它把主题立起来，
+ * 再把发散结果挂到它下面 —— 否则一次发散 3 条会得到 3 个并列的孤立根节点。
+ */
+export interface EnsureThemeRootRequest {
+  projectId: string
+  /** 只在需要新建时使用；为空则用「创意主题」 */
+  theme?: string
+}
+
+export interface EnsureThemeRootResponse {
+  /** 已存在则是原有节点；新建则是刚创建的节点 */
+  node: TreeNode
+}
+
+/**
+ * "AI 生成主题"：用户在新建画布对话框里不想自己想主题时点它。
+ * `hint` 是可选的参考方向（用户随手打的两个词就行，不必是完整主题）。
+ */
+export interface SuggestThemeRequest {
+  hint?: string
+  /** 不传则用主进程的默认生成器 */
+  generatorId?: string
+}
+
+export interface SuggestThemeResponse {
+  /** 已清洗过的单行主题（去引号/序号/Markdown 标记，长度受控） */
+  theme: string
 }
 
 /** 切到某个已存在的画布 */
@@ -333,6 +369,10 @@ export interface IdeaSproutApi {
   listProjects(): Promise<ListProjectsResponse>
   /** 新建空白画布并切过去；返回新画布的完整内容 */
   createProject(req?: CreateProjectRequest): Promise<ProjectFile>
+  /** 取/建画布的顶层主题节点（发散的默认父节点） */
+  ensureThemeRoot(req: EnsureThemeRootRequest): Promise<EnsureThemeRootResponse>
+  /** "AI 生成主题"：让默认生成器给一句主题（不落库） */
+  suggestTheme(req: SuggestThemeRequest): Promise<SuggestThemeResponse>
   /** 切到指定画布 */
   switchProject(req: SwitchProjectRequest): Promise<ProjectFile>
   /** 关闭画布 tab（项目文件保留）；返回关闭后的 tab 列表 */

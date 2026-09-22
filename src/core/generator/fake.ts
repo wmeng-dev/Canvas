@@ -102,6 +102,20 @@ export function createFakeGenerator(
       const parentRaw = spec.parentContext ?? ''
       const parentSafe = echo ? parentRaw : escapeHtml(parentRaw)
 
+      // 主题请求（见 core/theme.ts 的 suggestTheme）：真实模型会返回"一句短主题"，
+      // 而占位器只会原样复述我们那段提示词 —— 直接返回会变成一坨没意义的文字。
+      // 所以这里给一句确定性的短主题：既让开发态看得下去，也让探针能稳定断言。
+      if (spec.nodeId === 'theme') {
+        const theme = `占位主题 #${n}`
+        return {
+          contentType: 'text',
+          text: theme,
+          title: theme,
+          model: 'fake',
+          finishedAt: new Date().toISOString(),
+        }
+      }
+
       let text: string
       switch (type) {
         case 'html': {

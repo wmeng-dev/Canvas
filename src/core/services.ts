@@ -14,7 +14,7 @@ import {
   openSecret,
 } from './settings-store'
 import type { AppState, SecretBox } from './settings-store'
-import type { ProjectFile, ProjectSummary } from '../shared/types'
+import type { ProjectFile, ProjectSummary, TreeNode } from '../shared/types'
 import type { McpServerStatus, McpServerTemplate } from '../shared/settings'
 
 export interface AppServices {
@@ -129,11 +129,34 @@ export function reopenProject(svc: AppServices, projectId: string): ProjectFile 
 }
 
 /**
+ * 取画布的**顶层主题节点**（唯一那个 `parentId === null` 的想法节点）；没有就按 `theme` 立一个。
+ *
+ * 为什么要有它：**发散的默认父节点就是它**（见 treeStore.generate）。若默认挂到"根层"，
+ * 一次发散 3 条就会得到 3 个并列的孤立根节点 —— 画布看着散，也没有统一的父上下文。
+ * 画布还没有顶层节点时（新建后的空白画布 / 早期历史画布），这里顺手补上。
+ *
+ * ⚠️ 老画布可能残留多个根节点（空白期留下的数据）：一律返回**第一个**，不去动老数据 ——
+ * 迁移不该在这里悄悄替用户删东西。
+ */
+export function ensureThemeRoot(svc: AppServices, projectId: string, theme?: string): TreeNode {
+  const file = svc.repo.get(projectId)
+  const top = file.tree.nodes.find((n) => n.parentId === null)
+  if (top) return top
+  const t = theme?.trim() ?? ''
+  return svc.repo.addNode(projectId, {
+    label: t || '创意主题',
+    prompt: t,
+    status: 'empty',
+    position: { x: 0, y: 0 },
+  })
+}
+
+/**
  * 新建一个画布并立刻切过去。
  *
- * ⚠️ 刻意**不加默认根节点**：用户明确要求新建的是空白页，从零开始自己加想法。
- * （首次启动时 `ensureProject()` 仍会建一个带「创意主题」的画布，那是"从来没用过"的引导态，
- *   与"主动新建"意图不同。）
+ * ⚠️ 新建的仍是**空白页**（用户明确要求从零开始自己加想法）。
+ * 顶层主题节点不在这里建，而是等第一次发散时由 `ensureThemeRoot()` 按需立起 ——
+ * 那时才知道用户想给的主题是什么（也可以让 AI 生成）。
  */
 export function createProject(svc: AppServices, name?: string): ProjectFile {
   const file = svc.repo.create(name?.trim() || '未命名画布')
@@ -171,12 +194,8 @@ export function ensureProject(svc: AppServices): ProjectFile {
   }
 
   const file = svc.repo.create('我的创意')
-  svc.repo.addNode(file.project.id, {
-    label: '创意主题',
-    prompt: '',
-    status: 'empty',
-    position: { x: 0, y: 0 },
-  })
+  // 引导态画布也走同一个入口：保证"每张画布都有顶层主题节点"这条不变量
+  ensureThemeRoot(svc, file.project.id)
   const created = svc.repo.get(file.project.id)
   svc.appState.update((s) => ({ ...s, lastProjectId: created.project.id }))
   return created

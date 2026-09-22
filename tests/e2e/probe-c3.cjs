@@ -106,7 +106,9 @@ async function main() {
   check('canvas gained exactly 1 node', nodesAfter === 2, 'nodes=' + nodesAfter)
   await waitFor(async () => (await js('document.querySelectorAll(".react-flow__edge").length')) >= 1)
   const edgesAfter = await js('document.querySelectorAll(".react-flow__edge").length')
-  check('root-level node adds no edge', edgesAfter === 0, 'edges=' + edgesAfter)
+  // ⚠️ 默认父节点是画布的**顶层主题节点**（不是"根层"）：生成即有 1 条边。
+  //    挂根层的话这里会是 0 条边 —— 那正是"一次发散 N 条得到 N 个孤立根节点"的老毛病。
+  check('发散结果挂在顶层主题节点下（生成即 1 条边）', edgesAfter === 1, 'edges=' + edgesAfter)
   const previewText = await js('document.querySelector("aside").innerText.replace(/\\n/g," | ")')
   check('preview shows generated content', previewText.includes(PROMPT), JSON.stringify(previewText.slice(0, 120)))
   const appError1 = await js('!!document.querySelector(\'[data-testid="app-error"]\')')
@@ -149,9 +151,10 @@ async function main() {
 
   const nodes3 = await js('document.querySelectorAll(".react-flow__node").length')
   // ⚠️ 偶发（历史复现率约 1/3）：新节点已进 DOM、磁盘上也有边，但 React Flow 这一轮没把边画出来。
-  //    不能只等 ">=1"（那会立刻放行），要等"恰好 1 条"；超时后把现场 dump 出来，下次复现能直接定位。
+  //    不能只等 ">=1"（那会立刻放行），要等"恰好 2 条"；超时后把现场 dump 出来，下次复现能直接定位。
+  //    （2 条 = 主题→首个发散节点 + 首个发散节点→这条支线；首个发散节点不再是根层孤立节点）
   const edgeOk = await waitFor(
-    async () => (await js('document.querySelectorAll(".react-flow__edge").length')) === 1,
+    async () => (await js('document.querySelectorAll(".react-flow__edge").length')) === 2,
     8000,
   )
   const edges3 = await js('document.querySelectorAll(".react-flow__edge").length')
@@ -168,7 +171,8 @@ async function main() {
     }))()`)
     console.log('  [DIAG 边未渲染] ' + JSON.stringify(dump))
   }
-  check('branching adds exactly 1 edge', edges3 === 1, 'edges=' + edges3)
+  // 2 条 = 主题→首个发散节点 + 首个发散节点→这条支线
+  check('branching adds exactly 1 edge', edges3 === 2, 'edges=' + edges3)
   const preview3 = await js('document.querySelector("aside").innerText.replace(/\\n/g," | ")')
   check('child content uses parent context', preview3.includes('基于父节点：'), JSON.stringify(preview3.slice(0, 140)))
 
@@ -176,10 +180,12 @@ async function main() {
   const child = disk3.tree.nodes[2] || {}
   check('disk: child links to its parent', child.parentId === disk3.tree.nodes[1].id,
     JSON.stringify({ childParent: child.parentId, expected: disk3.tree.nodes[1].id }))
+  // 2 条边：主题 → 首个发散节点，以及 首个发散节点 → 这条支线
+  const childEdge = disk3.tree.edges.find((e) => e && e.target === child.id)
   check('disk: edge source/target correct',
-    disk3.tree.edges.length === 1 &&
-      disk3.tree.edges[0].source === disk3.tree.nodes[1].id &&
-      disk3.tree.edges[0].target === child.id)
+    disk3.tree.edges.length === 2 && !!childEdge &&
+      childEdge.source === disk3.tree.nodes[1].id,
+    JSON.stringify(disk3.tree.edges))
   // D.7：节点显示名换成了"发散结果标题"，原始输入退到 prompt 字段
   check('child label is the generated result title (not the raw prompt)',
     /^发散方案 #\d+：/.test(child.label) && child.label !== CHILD_PROMPT, JSON.stringify(child.label))

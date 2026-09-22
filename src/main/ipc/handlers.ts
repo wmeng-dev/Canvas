@@ -18,6 +18,8 @@ import type {
   SaveProjectRequest,
   SetNodeArchivedRequest,
   CreateProjectRequest,
+  EnsureThemeRootRequest,
+  SuggestThemeRequest,
   GenerateProposalRequest,
   SetNodeColorRequest,
   SetNodePositionRequest,
@@ -36,6 +38,7 @@ import {
   closeProject,
   createProject,
   ensureProject,
+  ensureThemeRoot,
   listClosedSummaries,
   listProjectSummaries,
   reopenProject,
@@ -43,6 +46,7 @@ import {
 } from '../../core/services'
 import type { AppServices } from '../../core/services'
 import { generateNode, regenerateNode } from '../../core/generate-node'
+import { suggestTheme } from '../../core/theme'
 import { generateProposal } from '../../core/generate-proposal'
 import { buildSettingsView, syncAiBackends } from '../../core/ai-backends'
 import { openSecret, sealSecret } from '../../core/settings-store'
@@ -156,6 +160,17 @@ export function registerIpcHandlers(svc: AppServices): void {
   ipcMain.handle(IPC.listProjects, () => ({ projects: listProjectSummaries(svc) }))
 
   ipcMain.handle(IPC.createProject, (_evt, req: CreateProjectRequest = {}) => createProject(svc, req.name))
+
+  // 发散前拿"顶层主题节点"：没有就按主题立一个 —— 它是发散的默认父节点，
+  // 有了它，一次发散 N 条才是"同一主题下的 N 个兄弟"，而不是 N 个并列的孤立根节点。
+  ipcMain.handle(IPC.ensureThemeRoot, (_evt, req: EnsureThemeRootRequest) => ({
+    node: ensureThemeRoot(svc, req.projectId, req.theme),
+  }))
+
+  // "AI 生成主题"：只回一句主题字符串，**不落库** —— 用户还可能改主意或取消。
+  ipcMain.handle(IPC.suggestTheme, async (_evt, req: SuggestThemeRequest = {}) => ({
+    theme: await suggestTheme(svc, req.hint, req.generatorId),
+  }))
 
   ipcMain.handle(IPC.switchProject, (_evt, req: SwitchProjectRequest) => switchProject(svc, req.projectId))
 

@@ -4,7 +4,8 @@
 //   B. tab 条：初始 1 个 tab，当前 tab 内嵌可编辑画布名；
 //   C. 新建画布：tab +1，新画布**空白**（0 节点），并自动切过去；
 //   D. 切回老画布：节点还在（tab 切换不丢内容）；
-//   E. 在空白画布上新增想法可用；
+//   E. 在空白画布上发散：自动立顶层主题节点（可手写 / AI 生成），发散结果挂在它下面
+//      —— 而不是变成一堆并列的孤立根节点；
 //   F. 落盘 + 重载：回到上次那张画布（tab 状态保持）；
 //   G. 回归：评论 / 收展 / 回收站 / 配色入口都还在。
 // 运行：node_modules/electron/dist/electron.exe probe-canvases.cjs（需清 ELECTRON_RUN_AS_NODE）
@@ -125,20 +126,78 @@ async function main() {
   check('再切回新画布仍是空白', await waitFor(async () =>
     (await activeTabId()) === secondId && (await ideaCount()) === 0))
 
-  // ---------- E. 在空白画布上新增想法 ----------
-  console.log('\n[E] 空白画布上直接新增想法')
+  // ---------- E. 在空白画布上发散：先立顶层主题，结果挂在它下面 ----------
+  // 这一段是"一次发散 3 条变成 3 个并列的孤立根节点"那个体验问题的回归测试：
+  // 默认父节点必须是**画布的顶层主题节点**，而不是"根层"。
+  console.log('\n[E] 空白画布上发散：自动立顶层主题 + 结果挂在它下面')
   await click('[data-testid="new-idea"]')
   check('新增想法对话框打开', await waitFor(() => js(`!!document.querySelector('[data-testid="generate-dialog"]')`)))
+  check('画布还没有顶层节点 → 对话框出现「主题」输入',
+    await waitFor(() => js(`!!document.querySelector('[data-testid="theme-input"]')`)))
+
+  // 「AI 生成主题」：占位生成器给的是确定性短主题
+  await click('[data-testid="suggest-theme"]')
+  const themeVal = () => js(`document.querySelector('[data-testid="theme-input"]')?.value ?? ''`)
+  check('「AI 生成主题」把结果填进主题输入框',
+    await waitFor(async () => /^占位主题 #\d+$/.test(String(await themeVal()))), await themeVal())
+
+  // 改成一个明确的主题，验证它落到顶层节点的标题上
+  await setInput('[data-testid="theme-input"]', '无人农机调度')
   await setInput('[data-testid="prompt-input"]', '从零开始：无人农机的调度策略')
-  await sleep(120)
+  // 一次发散 3 条 —— 正是当初"变成 3 个孤立根节点"的场景
+  await js(`(() => {
+    const sel = document.querySelector('[data-testid="count-select"]');
+    const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    d.set.call(sel, '3');
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`)
+  await sleep(150)
   await click('[data-testid="submit-generate"]')
-  check('空白画布上生成出节点', await waitFor(async () => (await ideaCount()) >= 1), await ideaCount())
-  check('新画布落盘有节点了', await waitFor(() => {
-    try { return readProjectFile(secondId).tree.nodes.length >= 1 } catch { return false }
-  }))
-  check('tab 上的节点数跟着更新', await waitFor(async () =>
-    (await js(`document.querySelector('[data-testid="project-tab"][data-project-id="${secondId}"] [data-testid="project-tab-count"]')?.textContent`)) === '1'),
-    await js(`document.querySelector('[data-testid="project-tab"][data-project-id="${secondId}"] [data-testid="project-tab-count"]')?.textContent`))
+
+  const edgeCount = () => js(`document.querySelectorAll('.react-flow__edge').length`)
+  check('画布上共 4 个节点（1 个主题 + 3 条发散）',
+    await waitFor(async () => (await ideaCount()) === 4), await ideaCount())
+  check('3 条发散各自连回主题（3 条边）',
+    await waitFor(async () => (await edgeCount()) === 3), await edgeCount())
+
+  const diskShape = () => {
+    try {
+      const f = readProjectFile(secondId)
+      return {
+        roots: f.tree.nodes.filter((n) => n.parentId === null).map((n) => n.label),
+        kids: f.tree.nodes.filter((n) => n.parentId !== null).length,
+        edges: f.tree.edges.length,
+      }
+    } catch {
+      return null
+    }
+  }
+  check('落盘：只有 1 个顶层节点，且它就是刚定的主题',
+    await waitFor(() => {
+      const s = diskShape()
+      return !!s && s.roots.length === 1 && s.roots[0] === '无人农机调度'
+    }), JSON.stringify(diskShape()))
+  check('落盘：3 条发散都是它的子节点（不是 3 个孤立根）',
+    await waitFor(() => diskShape()?.kids === 3), JSON.stringify(diskShape()))
+  check('落盘：3 条边都在（主题 → 各发散节点）',
+    await waitFor(() => diskShape()?.edges === 3), JSON.stringify(diskShape()))
+  const tabCountOf = (id) =>
+    js(`document.querySelector('[data-testid="project-tab"][data-project-id="${id}"] [data-testid="project-tab-count"]')?.textContent`)
+  check('tab 上的节点数跟着更新（4）',
+    await waitFor(async () => (await tabCountOf(secondId)) === '4'), await tabCountOf(secondId))
+
+  // 再开一次对话框：画布已有顶层节点 → 不再要主题，且明确说明会挂到哪
+  await click('[data-testid="new-idea"]')
+  check('已有顶层节点时不再出现「主题」输入',
+    await waitFor(async () => (await js(`!document.querySelector('[data-testid="theme-input"]')`)) === true))
+  const dlgText2 = await js(`document.querySelector('[data-testid="generate-dialog"]').innerText`)
+  check('对话框说明会挂到顶层主题下', dlgText2.includes('无人农机调度'), JSON.stringify(dlgText2.slice(0, 90)))
+  await click('[data-testid="submit-generate"]') // 空描述会被拦下，顺便确认不误伤
+  await sleep(200)
+  check('空描述不生成（提示仍未关掉对话框）',
+    await js(`!!document.querySelector('[data-testid="generate-dialog"]')`))
+  await js(`document.querySelector('[data-testid="generate-dialog"] .btn')?.click()`) // 取消
+  await waitFor(async () => (await js(`!document.querySelector('[data-testid="generate-dialog"]')`)))
 
   // ---------- F. 重载 ----------
   console.log('\n[F] 重载后回到上次那张画布')
@@ -147,7 +206,7 @@ async function main() {
   await sleep(1600)
   check('reload 后 tab 仍是 2 个', await waitFor(async () => (await tabCount()) === 2), await tabCount())
   check('reload 后停在新画布（tab 状态保持）', await waitFor(async () => (await activeTabId()) === secondId))
-  check('新画布的内容还在', await waitFor(async () => (await ideaCount()) === 1), await ideaCount())
+  check('新画布的内容还在（4 个节点）', await waitFor(async () => (await ideaCount()) === 4), await ideaCount())
 
   // ---------- G. 回归 ----------
   console.log('\n[G] 回归：其它入口仍在')
