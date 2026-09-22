@@ -75,12 +75,18 @@ node scripts/verify.cjs --list                    # 列出探针
   那会让 exe 丢掉图标和版本信息。
 - **macOS**：dmg/zip **只能在 macOS 上构建** —— 在 Mac 上 `node scripts/dist.cjs --mac`，
   或走 CI 模板 `docs/ci/github-actions-build.yml`（macos-latest）。
+- **发布到 GitHub Release**：`electron-builder.yml` 的 `publish` 已指向 GitHub Releases，
+  打 tag（`v*`）时 CI 模板 `docs/ci/github-actions-release.yml` 会构建并**上传到 Release**
+  （`build.yml` 只上传 Actions Artifacts，两者最后一步不同）。
+  ⚠️ 自动更新的**客户端（electron-updater）尚未接入** —— 现在只完成了托管侧。
+  详见 [docs/自动更新说明.md](docs/自动更新说明.md)。
 
 ## 文档
 
 | 文档 | 内容 |
 | --- | --- |
 | [docs/MCP接入配置说明.md](docs/MCP接入配置说明.md) | 让外部 AI 客户端读画布数据（可直接丢给 AI 照着配） |
+| [docs/自动更新说明.md](docs/自动更新说明.md) | 自动更新（GitHub Releases 托管）的方案、现状与接入步骤 |
 | [docs/IdeaSprout桌面应用_方案.md](docs/IdeaSprout桌面应用_方案.md) | 产品与技术方案 |
 | [docs/IdeaSprout_开发计划.md](docs/IdeaSprout_开发计划.md) | 分阶段开发计划 |
 | [docs/IdeaSprout_实现计划_Phase0-1.md](docs/IdeaSprout_实现计划_Phase0-1.md) | Phase 0-1 实现计划 |
@@ -89,9 +95,12 @@ node scripts/verify.cjs --list                    # 列出探针
 
 | 症状 | 原因与处理 |
 | --- | --- |
-| `npm install` / `npm run` 直接崩 | 本机 npm（arborist）不可用。改直连 node 二进制跑 `tsc` / `vite` / `scripts/*.cjs`，见「开发」一节 |
-| `has no exported member 'Node'`、`Cannot find module 'zod/v3/index.cjs'`、`registerTool is not a function` | `node_modules` 顶层不完整（被 pnpm 装过的混合体）。补齐依赖后重跑，别只删 `node_modules` 了事 |
+| 裸敲 `npm` 输出乱码 | 只是 bash shim 的问题，**npm 本身是好的**（10.9.7）。用 node 直调：`node "<nodedir>/node_modules/npm/bin/npm-cli.js" --version` |
+| 想装新依赖 | ⚠️ **别在这台机器上直接 `npm install`** —— 实测（`--dry-run`）会 `added 71 / removed 83 / changed 6`，连打包必需的 `app-builder-bin` 都被删、`@types/node` 被降级。装依赖的可行做法见 [docs/自动更新说明.md](docs/自动更新说明.md) 第四节 |
+| `has no exported member 'Node'`、`Cannot find module 'zod/v3/index.cjs'`、`registerTool is not a function` | `node_modules` 顶层不完整（历史上被重装过的混合体）。上面那条「别直接 npm install」就是防止再次踩进来 |
 | 打包报 `Cannot create symbolic link … 客户端没有所需的特权` | winCodeSign 里含 macOS 符号链接。用 `scripts/dist-win.cjs`（已内置兜底）；根治是开开发者模式或用管理员运行 |
 | 打包报 `remove app.asar: 被另一个进程使用` | 输出目录被安全软件 / 索引器锁住。换一个全新的输出目录（脚本默认按时间戳新建，已规避） |
 | 冒烟打包后的 exe 启动即退出、无日志 | 环境里残留了 `ELECTRON_RUN_AS_NODE`，删掉再跑 |
 | 双击图标"没反应" | 已加单实例锁：应用只允许一个实例，第二次启动会把已有窗口还原并聚焦。日志会打印 `已有实例在运行` |
+| 自动更新"永远提示已是最新" | 三个常见原因：① Release 还是 **draft**（electron-updater 会跳过 draft）；② tag 与 `package.json` 的 `version` 不一致；③ macOS 未签名（Squirrel.Mac 拒绝更新） |
+

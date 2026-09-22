@@ -35,6 +35,26 @@ directories:
   output: release
   buildResources: build
 
+# ---------- 发布源（GitHub Releases）----------
+# 作用有两层：
+#   ① 打包时生成更新元数据（app-update.yml + NSIS 的 latest.yml），这是"更新托管"的载荷；
+#   ② 让 `--publish always` 能把安装包 + latest.yml 传到 GitHub Release。
+# 默认不带 `--publish` 就**不会**上传（electron-builder 默认 publish=never），
+# 所以加这段不改变现有本地打包行为；CI 里才显式 `--publish always`。
+#
+# ⚠️ 客户端（electron-updater）尚未接入 —— 见 docs/自动更新说明.md 的"现状"一节。
+#    也就是说：这套配置目前只能"发布"，还不能"自动更新"。别以为配了 publish 就完事了。
+#
+# 需要 GH_TOKEN（GitHub Actions 里用内置 GITHUB_TOKEN 即可，要 `contents: write` 权限）。
+publish:
+  provider: github
+  owner: wmeng-dev
+  repo: Canvas
+  # ⚠️ 必须显式写 release —— electron-builder 对 GitHub 默认发 **draft**，
+  #    而 electron-updater 只认已发布的 Release，draft 会被跳过（表现为"永远提示已是最新"）。
+  #    想改成人工复核后再发，就删掉这行、发完手动点 Publish —— 但别忘了这步，否则更新查不到。
+  releaseType: release
+
 files:
   - dist-electron/**/*
   - dist/renderer/**/*

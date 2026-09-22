@@ -6,11 +6,10 @@ dist-electron/
 dist-test/
 # electron-builder output (installer / unpacked app)
 release/
-# 临时输出目录（release/win-unpacked 被占用时的绕开目录，见 electron-builder.yml）
-release-tmp/
-release-clean/
-release-win/
-release-win-*/
+# electron-builder 的其它输出目录（release-win-20260922-1201 / release-tmp / release-clean …）。
+# ⚠️ 用 `release-*/` 族匹配而不是逐个列：漏一个目录，`git add -A` 就会把 ~180MB 的 exe 带进提交。
+# 也别只写 release-win-*/ —— 临时验证目录常起别的名字（如 release-check-*）。
+release-*/
 # WorkBuddy project data (personal config, do NOT commit)
 .workbuddy/
 # Local data / secrets

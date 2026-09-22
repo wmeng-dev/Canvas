@@ -5,6 +5,10 @@
   "main": "dist-electron/main/main.js",
   "author": "wmeng-dev",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wmeng-dev/Canvas.git"
+  },
   "scripts": {
     "dev": "npm run build:main && concurrently -k \"vite\" \"electron .\"",
     "build:main": "tsc -p tsconfig.main.json",

@@ -1,0 +1,83 @@
+# ⚠️ 与 github-actions-build.yml 同理：这是**模板文件**，故意放在 docs/ci/ 而非 .github/workflows/。
+#    本机推送用的 Personal Access Token 没有 workflow 权限，GitHub 会直接拒绝整批推送
+#    （refusing to allow a Personal Access Token to create or update workflow ... without `workflow` scope）。
+#    启用方式二选一：
+#      ① GitHub 网页：Actions → New workflow → "set up a workflow yourself" → 粘贴本文件内容，
+#         路径填 .github/workflows/release.yml（最省事，不动 token）
+#      ② 给 PAT 加上 workflow scope 后，把本文件移到 .github/workflows/release.yml 再 push
+#
+# ============ 这个工作流做什么 ============
+# 打 tag 发版 → 构建安装包 → **上传到 GitHub Release**（不只是 Actions 里的 Artifacts）。
+# 与 build.yml 的区别就在最后一步：
+#   · build.yml   用 `--publish never`，产物只进 Actions Artifacts（人工下载分发）
+#   · 本文件      用 `--publish always`，产物 + latest.yml 进 GitHub Release（自动更新读这里）
+#
+# ============ 与自动更新的关系（重要）============
+# GitHub Release 是"更新托管"的那一半。另一半是客户端：应用内的 electron-updater
+# 主动去读 release 里的 latest.yml 比对版本。**客户端目前尚未接入**（见 docs/自动更新说明.md），
+# 所以本工作流现在的作用是「规范发版 + 制品托管」，让客户端接入后能立即生效。
+#
+# ⚠️ 发布必须**已发布**（不是 draft）：electron-builder 对 GitHub 默认发 draft，
+#    而 electron-updater 会跳过 draft（表现为"永远提示已是最新"）。
+#    electron-builder.yml 里已写死 `releaseType: release`，别在 UI 上把它改回 draft。
+#
+# ⚠️ 版本号来自 package.json 的 version。发版前必须先改 version 并提交，
+#    否则 tag 与包内版本不一致，客户端会一直认为"已是最新"。
+#
+# ============ 触发 ============
+#   · push 标签 v*（如 v0.1.1）—— 常规发版
+#   · 手动 workflow_dispatch
+#
+# ============ 签名（未签名也能发，但有限制）============
+#   · Windows：未签名的 NSIS 包可以自动更新（electron-updater 走 NSIS 安装流程，不强制签名），
+#     但用户首次安装会撞 SmartScreen 警告。
+#   · macOS：**未签名基本无法自动更新** —— Squirrel.Mac 要求包已签名，否则更新会被拒绝。
+#     要 macOS 自动更新就必须配 Apple 开发者证书（下面 mac 任务的 CSC_* 环境变量）。
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# electron-builder 要往 Release 传文件，需要写 contents 的权限
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build:main
+      - run: npm run build:renderer
+      - name: 打包并发布 Windows 安装包
+        # GH_TOKEN 用内置 GITHUB_TOKEN（配合上面的 permissions: contents: write）
+        # --publish always 才会真正上传；漏了它只会本地出包，Release 是空的。
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build:main
+      - run: npm run build:renderer
+      - name: 打包并发布 macOS（dmg + zip，x64 与 arm64）
+        run: npx electron-builder --mac --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 未配证书时明确关掉自动发现，避免卡在找签名身份。
+          # 要 macOS 自动更新就必须配证书：把下面这行删掉/改 true，
+          # 并在仓库 Secrets 里配 MAC_CERTIFICATE（base64 的 .p12）、MAC_CERTIFICATE_PASSWORD、CSC_KEY_PASSWORD。
+          CSC_IDENTITY_AUTO_DISCOVERY: false
