@@ -42,8 +42,10 @@ directories:
 # 默认不带 `--publish` 就**不会**上传（electron-builder 默认 publish=never），
 # 所以加这段不改变现有本地打包行为；CI 里才显式 `--publish always`。
 #
-# ⚠️ 客户端（electron-updater）尚未接入 —— 见 docs/自动更新说明.md 的"现状"一节。
-#    也就是说：这套配置目前只能"发布"，还不能"自动更新"。别以为配了 publish 就完事了。
+# ✅ 客户端（electron-updater）已接入 —— 见 src/main/auto-update.ts 与 docs/自动更新说明.md。
+#    但有两条前提永远成立，弄错就会「静默地永远提示已是最新」：
+#      ① Release 必须是「已发布」，不能是 draft（见下方 releaseType）；
+#      ② 包内 version 必须**低于**要更新到的那个 Release 的 version（比对用包内版本，不是 tag 名）。
 #
 # 需要 GH_TOKEN（GitHub Actions 里用内置 GITHUB_TOKEN 即可，要 `contents: write` 权限）。
 publish:
